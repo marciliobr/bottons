@@ -12,13 +12,18 @@
   <header class="toolbar">
     <div class="brand">
       <h1>Bottons 32 mm</h1>
-      <p id="count">0 de 35</p>
+      <p id="count">0 de 24 · corte 44 mm</p>
     </div>
     <div class="toolbar-actions">
       <div class="sizes" role="group" aria-label="Tamanho">
         <button type="button" data-size="32" aria-pressed="true">32</button>
         <button type="button" data-size="44" aria-pressed="false">44</button>
         <button type="button" data-size="58" aria-pressed="false">58</button>
+      </div>
+      <div class="view-zoom" role="group" aria-label="Zoom da folha">
+        <button type="button" id="view-out" aria-label="Reduzir a folha">−</button>
+        <button type="button" id="view-fit" title="Ajustar à tela">100%</button>
+        <button type="button" id="view-in" aria-label="Ampliar a folha">+</button>
       </div>
       <button type="button" id="clear">Limpar tudo</button>
       <button type="button" id="print">Imprimir</button>
@@ -38,7 +43,7 @@
     </div>
     <div class="inspector-sliders">
       <label class="tone-field" for="zoom">Zoom
-        <input type="range" id="zoom" min="1" max="4" step="0.01" value="1">
+        <input type="range" id="zoom" min="0.25" max="4" step="0.01" value="1">
       </label>
       <label class="tone-field" for="brightness">Brilho
         <input type="range" id="brightness" min="0.4" max="1.8" step="0.01" value="1">

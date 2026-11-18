@@ -1,11 +1,12 @@
 (function () {
   const SIZES = {
-    "32": { diameter: 32, cols: 5, rows: 7 },
-    "44": { diameter: 44, cols: 4, rows: 5 },
-    "58": { diameter: 58, cols: 3, rows: 4 }
+    "32": { diameter: 32, cut: 44, cols: 4, rows: 6, gap: 4 },
+    "44": { diameter: 44, cut: 54, cols: 3, rows: 5, gap: 3.5 },
+    "58": { diameter: 58, cut: 70, cols: 2, rows: 3, gap: 16 }
   };
 
-  const minScale = 1;
+  const minScale = 0.25;
+  const fitScale = 1;
   const maxScale = 4;
   const sheet = document.getElementById("sheet");
   const heading = document.querySelector(".toolbar h1");
@@ -20,9 +21,12 @@
   const maxBrightness = 1.8;
   const minSaturation = 0;
   const maxSaturation = 2;
-  const inset = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--inset")) || 2;
+  const viewMin = 1;
+  const viewMax = 3;
   const memory = {};
   let currentKey = null;
+  let pageFit = 1;
+  let viewZoom = 1;
   let controllers = [];
   let adjustingCell = null;
   let selected = null;
@@ -31,6 +35,25 @@
   function sheetScale() {
     const value = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--scale"));
     return value > 0 ? value : 1;
+  }
+
+  function applyViewScale() {
+    const scale = pageFit * viewZoom;
+    document.documentElement.style.setProperty("--scale", String(scale > 0 ? scale : 1));
+    const label = document.getElementById("view-fit");
+    const outButton = document.getElementById("view-out");
+    const inButton = document.getElementById("view-in");
+    if (label) label.textContent = Math.round(viewZoom * 100) + "%";
+    if (outButton) outButton.disabled = viewZoom <= viewMin + 0.001;
+    if (inButton) inButton.disabled = viewZoom >= viewMax - 0.001;
+    controllers.forEach(function (controller) {
+      controller.layout();
+    });
+  }
+
+  function setViewZoom(value) {
+    viewZoom = Math.max(viewMin, Math.min(viewMax, value));
+    applyViewScale();
   }
 
   function sizeFromHash() {
@@ -43,7 +66,7 @@
     const total = spec.cols * spec.rows;
     if (!memory[key]) {
       memory[key] = Array.from({ length: total }, function () {
-        return { url: null, scale: minScale, x: 0, y: 0, brightness: 1, saturation: 1 };
+        return { url: null, scale: fitScale, x: 0, y: 0, brightness: 1, saturation: 1 };
       });
     }
     return memory[key];
@@ -66,7 +89,7 @@
     const filled = slots.filter(function (state) {
       return state.url;
     }).length;
-    countLabel.textContent = filled + " de " + slots.length;
+    countLabel.textContent = filled + " de " + slots.length + " · corte " + SIZES[currentKey].cut + " mm";
   }
 
   function syncInspector() {
@@ -118,14 +141,15 @@
     currentKey = key;
     const spec = SIZES[key];
     const slots = slotsFor(key);
-    const square = spec.diameter + inset * 2;
     const title = "Bottons " + spec.diameter + " mm";
 
     if (heading) heading.textContent = title;
     setSizePressed(key);
     document.documentElement.style.setProperty("--diameter", spec.diameter + "mm");
-    sheet.style.gridTemplateColumns = "repeat(" + spec.cols + ", " + square + "mm)";
-    sheet.style.gridTemplateRows = "repeat(" + spec.rows + ", " + square + "mm)";
+    document.documentElement.style.setProperty("--cut", spec.cut + "mm");
+    document.documentElement.style.setProperty("--gap", spec.gap + "mm");
+    sheet.style.gridTemplateColumns = "repeat(" + spec.cols + ", " + spec.cut + "mm)";
+    sheet.style.gridTemplateRows = "repeat(" + spec.rows + ", " + spec.cut + "mm)";
     sheet.replaceChildren();
     controllers = slots.map(function (state) {
       return createCell(state);
@@ -147,6 +171,9 @@
     img.hidden = true;
     img.draggable = false;
 
+    const cut = document.createElement("div");
+    cut.className = "cut";
+
     const circle = document.createElement("div");
     circle.className = "circle";
 
@@ -161,7 +188,7 @@
     input.tabIndex = -1;
 
     frame.appendChild(img);
-    cell.append(frame, circle, addMark, input);
+    cell.append(frame, cut, circle, addMark, input);
     sheet.appendChild(cell);
 
     const controller = {
@@ -210,8 +237,8 @@
       const cover = Math.max(frameW / img.naturalWidth, frameH / img.naturalHeight);
       const width = img.naturalWidth * cover * state.scale;
       const height = img.naturalHeight * cover * state.scale;
-      const maxX = Math.max(0, (width - frameW) / 2);
-      const maxY = Math.max(0, (height - frameH) / 2);
+      const maxX = Math.abs(width - frameW) / 2;
+      const maxY = Math.abs(height - frameH) / 2;
       state.x = Math.max(-maxX, Math.min(maxX, state.x));
       state.y = Math.max(-maxY, Math.min(maxY, state.y));
       img.style.width = width + "px";
@@ -248,7 +275,7 @@
         URL.revokeObjectURL(state.url);
         state.url = null;
       }
-      state.scale = minScale;
+      state.scale = fitScale;
       state.x = 0;
       state.y = 0;
       state.brightness = 1;
@@ -270,7 +297,7 @@
       stopAdjust();
       if (state.url) URL.revokeObjectURL(state.url);
       state.url = URL.createObjectURL(file);
-      state.scale = minScale;
+      state.scale = fitScale;
       state.x = 0;
       state.y = 0;
       state.brightness = 1;
@@ -297,7 +324,7 @@
     }
 
     function center() {
-      state.scale = minScale;
+      state.scale = fitScale;
       state.x = 0;
       state.y = 0;
       layoutImage();
@@ -391,6 +418,28 @@
     controller.zoomAt(event);
   }, { passive: false });
 
+  document.getElementById("view-out").addEventListener("click", function () {
+    const step = 0.25;
+    setViewZoom(Math.ceil(viewZoom / step - 1.001) * step);
+  });
+
+  document.getElementById("view-in").addEventListener("click", function () {
+    const step = 0.25;
+    setViewZoom(Math.floor(viewZoom / step + 1.001) * step);
+  });
+
+  document.getElementById("view-fit").addEventListener("click", function () {
+    setViewZoom(1);
+  });
+
+  document.querySelector(".stage").addEventListener("wheel", function (event) {
+    if (!event.ctrlKey && !event.metaKey) return;
+    if (event.target.closest(".is-adjusting")) return;
+    event.preventDefault();
+    const factor = event.deltaY < 0 ? 1.08 : 1 / 1.08;
+    setViewZoom(viewZoom * factor);
+  }, { passive: false });
+
   document.querySelectorAll("[data-size]").forEach(function (button) {
     button.addEventListener("click", function () {
       syncHash(button.dataset.size);
@@ -482,11 +531,9 @@
     const padY = stageStyle ? parseFloat(stageStyle.paddingTop) + parseFloat(stageStyle.paddingBottom) : 0;
     const availW = document.documentElement.clientWidth - padX;
     const availH = window.innerHeight - toolbarHeight - padY;
-    const viewScale = Math.min(1, availW / sheet.offsetWidth, availH / sheet.offsetHeight);
-    document.documentElement.style.setProperty("--scale", String(viewScale > 0 ? viewScale : 1));
-    controllers.forEach(function (controller) {
-      controller.layout();
-    });
+    const nextFit = Math.min(1, availW / sheet.offsetWidth, availH / sheet.offsetHeight);
+    pageFit = nextFit > 0 ? nextFit : 1;
+    applyViewScale();
   }
 
   window.addEventListener("resize", fit);
