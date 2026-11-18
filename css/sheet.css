@@ -132,9 +132,13 @@ body {
   cursor: default;
 }
 
-#view-fit {
-  min-width: 58px;
-  color: var(--ink);
+.toolbar-actions > button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.toolbar-actions > button:disabled:hover {
+  background: #fff;
 }
 
 .toolbar-actions > button,
@@ -452,7 +456,8 @@ body.is-swapping * {
     opacity: 0.28;
   }
 
-  .cell.is-swap-target {
+  .cell.is-swap-target,
+  .cell.is-drop-target {
     z-index: 3;
     box-shadow:
       0 0 0 0.7mm #9a3412,
@@ -534,6 +539,10 @@ body.is-swapping * {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 8px;
+  }
+
+  #print {
+    grid-column: 1 / -1;
   }
 
   .sizes,

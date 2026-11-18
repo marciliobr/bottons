@@ -33,6 +33,8 @@
   let drag = null;
   let swap = null;
   let ignoreClick = false;
+  const histories = {};
+  const ownedUrls = new Set();
 
   function sheetScale() {
     const value = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--scale"));
@@ -160,6 +162,7 @@
     });
     syncInspector();
     updateCount();
+    updateUndo();
     fit();
   }
 
@@ -206,6 +209,7 @@
         return cell.classList.contains("is-adjusting");
       },
       clearImage: clearImage,
+      setImage: setImage,
       zoomAt: zoomAt,
       setScale: setScale,
       setBrightness: setBrightness,
@@ -293,12 +297,11 @@
       select(controller);
     }
 
-    function clearImage() {
+    function clearImage(options) {
+      const record = !options || options.record !== false;
+      if (record && state.url) pushHistory(currentKey);
       stopAdjust();
-      if (state.url) {
-        URL.revokeObjectURL(state.url);
-        state.url = null;
-      }
+      state.url = null;
       state.scale = fitScale;
       state.x = 0;
       state.y = 0;
@@ -315,12 +318,16 @@
       cell.classList.remove("has-image");
       if (selected === controller) deselect();
       if (currentKey) updateCount();
+      if (record) releaseUnused();
     }
 
-    function setImage(file) {
+    function setImage(file, options) {
+      const record = !options || options.record !== false;
+      if (record) pushHistory(currentKey);
       stopAdjust();
-      if (state.url) URL.revokeObjectURL(state.url);
-      state.url = URL.createObjectURL(file);
+      const url = URL.createObjectURL(file);
+      ownedUrls.add(url);
+      state.url = url;
       state.scale = fitScale;
       state.x = 0;
       state.y = 0;
@@ -330,6 +337,7 @@
       showImage();
       updateCount();
       select(controller);
+      if (record) releaseUnused();
     }
 
     function setScale(value) {
@@ -428,7 +436,100 @@
     return null;
   }
 
+  function pushHistory(key) {
+    if (!key) return;
+    if (!histories[key]) histories[key] = [];
+    histories[key].push(slotsFor(key).map(function (state) {
+      return {
+        url: state.url,
+        scale: state.scale,
+        x: state.x,
+        y: state.y,
+        brightness: state.brightness == null ? 1 : state.brightness,
+        saturation: state.saturation == null ? 1 : state.saturation
+      };
+    }));
+    if (histories[key].length > 30) histories[key].shift();
+    updateUndo();
+  }
+
+  function urlsInUse() {
+    const used = new Set();
+    Object.keys(memory).forEach(function (key) {
+      (memory[key] || []).forEach(function (state) {
+        if (state.url) used.add(state.url);
+      });
+    });
+    Object.keys(histories).forEach(function (key) {
+      histories[key].forEach(function (snap) {
+        snap.forEach(function (state) {
+          if (state.url) used.add(state.url);
+        });
+      });
+    });
+    return used;
+  }
+
+  function releaseUnused() {
+    const used = urlsInUse();
+    ownedUrls.forEach(function (url) {
+      if (!used.has(url)) {
+        URL.revokeObjectURL(url);
+        ownedUrls.delete(url);
+      }
+    });
+  }
+
+  function updateUndo() {
+    const button = document.getElementById("undo");
+    const stack = currentKey && histories[currentKey];
+    if (button) button.disabled = !stack || !stack.length;
+  }
+
+  function undo() {
+    const stack = histories[currentKey];
+    if (!stack || !stack.length) return;
+    const snap = stack.pop();
+    if (adjustingCell) adjustingCell.stopAdjust();
+    snap.forEach(function (saved, index) {
+      const state = slotsFor(currentKey)[index];
+      state.url = saved.url;
+      state.scale = saved.scale;
+      state.x = saved.x;
+      state.y = saved.y;
+      state.brightness = saved.brightness;
+      state.saturation = saved.saturation;
+    });
+    controllers.forEach(function (controller) {
+      controller.showState();
+    });
+    updateCount();
+    releaseUnused();
+    updateUndo();
+    if (selected && selected.state.url) syncInspector();
+    else deselect();
+    fit();
+  }
+
+  function placeFiles(start, files) {
+    const images = [];
+    Array.from(files || []).forEach(function (file) {
+      if (file.type.indexOf("image/") === 0) images.push(file);
+    });
+    if (!images.length || !start) return;
+    const startIndex = controllers.indexOf(start);
+    if (startIndex < 0) return;
+    pushHistory(currentKey);
+    images.forEach(function (file, offset) {
+      const controller = controllers[startIndex + offset];
+      if (controller) controller.setImage(file, { record: false });
+    });
+    releaseUnused();
+    updateUndo();
+  }
+
   function exchange(source, target) {
+    pushHistory(currentKey);
     ["url", "scale", "x", "y", "brightness", "saturation"].forEach(function (key) {
       const hold = source.state[key];
       source.state[key] = target.state[key];
@@ -445,26 +546,32 @@
 
   function copyOnto(source, target) {
     const from = source.state.url;
+    const key = currentKey;
+    const targetState = target.state;
     if (!from) return;
     fetch(from).then(function (response) {
       return response.blob();
     }).then(function (blob) {
       const url = URL.createObjectURL(blob);
-      if (target.state.url) URL.revokeObjectURL(target.state.url);
-      target.state.url = url;
-      target.state.scale = source.state.scale;
-      target.state.x = source.state.x;
-      target.state.y = source.state.y;
-      target.state.brightness = source.state.brightness;
-      target.state.saturation = source.state.saturation;
-      const live = controllers.filter(function (controller) {
-        return controller.state === target.state;
-      })[0];
-      if (!live) return;
-      if (live.isAdjusting()) live.stopAdjust();
-      live.showState();
-      updateCount();
-      select(live);
+      ownedUrls.add(url);
+      pushHistory(key);
+      targetState.url = url;
+      targetState.scale = source.state.scale;
+      targetState.x = source.state.x;
+      targetState.y = source.state.y;
+      targetState.brightness = source.state.brightness;
+      targetState.saturation = source.state.saturation;
+      const live = currentKey === key ? controllers.filter(function (controller) {
+        return controller.state === targetState;
+      })[0] : null;
+      if (live) {
+        if (live.isAdjusting()) live.stopAdjust();
+        live.showState();
+        updateCount();
+        select(live);
+      }
+      releaseUnused();
+      updateUndo();
     }).catch(function () {});
   }
 
@@ -737,6 +844,40 @@
     if (event.target.closest(".cell")) event.preventDefault();
   });
 
+  let dropController = null;
+
+  function draggingFiles(event) {
+    const types = event.dataTransfer && event.dataTransfer.types;
+    return types && Array.from(types).indexOf("Files") !== -1;
+  }
+
+  function setDropTarget(controller) {
+    if (dropController === controller) return;
+    if (dropController) dropController.cell.classList.remove("is-drop-target");
+    dropController = controller;
+    if (controller) controller.cell.classList.add("is-drop-target");
+  }
+
+  document.addEventListener("dragover", function (event) {
+    if (!draggingFiles(event)) return;
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+    setDropTarget(cellAtPoint(event.clientX, event.clientY));
+  });
+
+  document.addEventListener("drop", function (event) {
+    if (!draggingFiles(event)) return;
+    event.preventDefault();
+    const controller = cellAtPoint(event.clientX, event.clientY);
+    setDropTarget(null);
+    if (!controller || !event.dataTransfer) return;
+    placeFiles(controller, event.dataTransfer.files);
+  });
+
+  document.addEventListener("dragend", function () {
+    setDropTarget(null);
+  });
+
   sheet.addEventListener("wheel", function (event) {
     const frame = event.target.closest(".frame");
     if (!frame || !sheet.contains(frame)) return;
@@ -811,6 +952,11 @@
   });
 
   window.addEventListener("keydown", function (event) {
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z" && !event.shiftKey) {
+      event.preventDefault();
+      undo();
+      return;
+    }
     if (event.key === "Control" && swap && swap.ghost) swap.ghost.classList.add("is-copy");
     if (event.key === "Escape" && adjustingCell) {
       adjustingCell.stopAdjust();
@@ -848,12 +994,22 @@
   });
   window.addEventListener("afterprint", fit);
 
+  document.getElementById("undo").addEventListener("click", undo);
+
   document.getElementById("clear").addEventListener("click", function () {
+    const filled = controllers.some(function (controller) {
+      return controller.state.url;
+    });
+    if (!filled) return;
+    pushHistory(currentKey);
+    if (adjustingCell) adjustingCell.stopAdjust();
     controllers.forEach(function (controller) {
-      controller.clearImage();
+      controller.clearImage({ record: false });
     });
     deselect();
     updateCount();
+    releaseUnused();
+    updateUndo();
   });
 
   function fit() {
