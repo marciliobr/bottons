@@ -1,0 +1,280 @@
+@page {
+  size: A4 portrait;
+  margin: 0;
+}
+
+:root {
+  --diameter: 32mm;
+  --inset: 2mm;
+  --square: calc(var(--diameter) + 2 * var(--inset));
+  --gap: 2mm;
+  --scale: 1;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: system-ui, sans-serif;
+  background: #e6e8eb;
+  color: #1a1a1a;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 20px;
+  background: #fff;
+  border-bottom: 1px solid #d5d8dc;
+}
+
+.toolbar h1 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 650;
+}
+
+.toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.size-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.size-field select {
+  font: 600 14px/1 system-ui, sans-serif;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #c5cad1;
+  background: #fff;
+  cursor: pointer;
+}
+
+.toolbar button {
+  font: 600 14px/1 system-ui, sans-serif;
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid #c5cad1;
+  background: #fff;
+  cursor: pointer;
+}
+
+.toolbar button:hover {
+  background: #f3f4f6;
+}
+
+#print {
+  background: #1f2933;
+  color: #fff;
+  border-color: #1f2933;
+}
+
+#print:hover {
+  background: #11181f;
+}
+
+.stage {
+  padding: 16px 12px 24px;
+}
+
+.sheet-sizer {
+  width: calc(210mm * var(--scale));
+  height: calc(297mm * var(--scale));
+  margin: 0 auto;
+}
+
+.sheet {
+  width: 210mm;
+  height: 297mm;
+  background: #fff;
+  display: grid;
+  gap: var(--gap);
+  justify-content: center;
+  align-content: center;
+  overflow: hidden;
+}
+
+.cell {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.frame {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.frame img {
+  position: absolute;
+  display: block;
+  max-width: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.frame img[hidden] {
+  display: none;
+}
+
+.cell.is-adjusting .frame {
+  cursor: grab;
+  touch-action: none;
+}
+
+.cell.is-adjusting .frame.is-dragging {
+  cursor: grabbing;
+}
+
+.cell::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border: 0.3mm solid #222;
+  pointer-events: none;
+}
+
+.circle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 1;
+  width: var(--diameter);
+  height: var(--diameter);
+  border-radius: 50%;
+  border: 0.25mm solid #9aa1a9;
+  background: #fff;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+@media screen {
+  .circle {
+    background: #f4f5f6;
+  }
+
+  .cell.has-image .circle {
+    background: transparent;
+    box-shadow: 0 0 0 40mm rgba(255, 255, 255, 0.42);
+  }
+}
+
+.controls {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 2.2mm;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 1mm;
+  padding: 0 1mm;
+}
+
+.controls button {
+  font: 600 2.3mm/1.2 system-ui, sans-serif;
+  padding: 0.7mm 1.4mm;
+  border-radius: 2mm;
+  cursor: pointer;
+  max-width: 100%;
+}
+
+.controls .pick {
+  border: 0;
+  background: rgba(20, 24, 28, 0.88);
+  color: #fff;
+}
+
+.controls .adjust,
+.controls .remove {
+  border: 0.2mm solid rgba(0, 0, 0, 0.25);
+  background: rgba(255, 255, 255, 0.94);
+  color: #1a1a1a;
+}
+
+.cell.is-adjusting .adjust {
+  border-color: #1f2933;
+  background: #1f2933;
+  color: #fff;
+}
+
+.controls input {
+  display: none;
+}
+
+@media screen {
+  .sheet {
+    transform: scale(var(--scale));
+    transform-origin: top left;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.12);
+  }
+}
+
+@media print {
+  :root {
+    --scale: 1;
+  }
+
+  html,
+  body {
+    width: 210mm;
+    height: 297mm;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+    overflow: hidden;
+  }
+
+  .toolbar,
+  .controls {
+    display: none !important;
+  }
+
+  .stage {
+    margin: 0;
+    padding: 0;
+  }
+
+  .sheet-sizer {
+    width: 210mm;
+    height: 297mm;
+    margin: 0;
+  }
+
+  .sheet {
+    transform: none !important;
+    box-shadow: none;
+  }
+
+  .circle {
+    display: none !important;
+  }
+
+  .cell::after,
+  .frame img {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
