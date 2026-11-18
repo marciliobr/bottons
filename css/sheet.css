@@ -398,9 +398,16 @@ body {
   .toolbar,
   .inspector,
   .add-mark,
-  .cut,
-  .circle {
+  .circle,
+  .cell:not(.has-image) .cut {
     display: none !important;
+  }
+
+  .cell.has-image .cut {
+    display: block !important;
+    border: 0.3mm solid #222;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 
   .stage {
