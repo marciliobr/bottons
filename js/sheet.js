@@ -104,7 +104,7 @@
     adjustButton.classList.toggle("is-on", adjusting);
     inspectorHint.textContent = adjusting
       ? "Arraste a foto. Use a roda ou o controle para ampliar."
-      : "Arraste para outra posição para trocar de lugar. Segure Control para copiar.";
+      : copyHint();
     zoomInput.value = String(active.state.scale);
     brightnessInput.value = String(active.state.brightness);
     saturationInput.value = String(active.state.saturation);
@@ -397,6 +397,19 @@
     return controller;
   }
 
+  function copyHint() {
+    const mode = touchCopyMode();
+    if (mode === "fingers") return "Arraste para trocar de lugar. Com dois dedos, copia.";
+    if (mode === "hold") return "Arraste para trocar de lugar. Segure um instante para copiar.";
+    return "Arraste para outra posição para trocar de lugar. Segure Control para copiar.";
+  }
+
+  function touchCopyMode() {
+    if (!window.matchMedia("(pointer: coarse)").matches) return "control";
+    const shortSide = Math.min(window.innerWidth, window.innerHeight);
+    return shortSide >= 600 ? "fingers" : "hold";
+  }
+
   function cellAtPoint(x, y) {
     const cells = sheet.querySelectorAll(".cell");
     for (let i = cells.length - 1; i >= 0; i -= 1) {
@@ -455,10 +468,26 @@
     swap.over = null;
   }
 
+  const pointers = new Set();
+
+  function armCopy() {
+    if (!swap) return;
+    swap.copy = true;
+    swap.controller.cell.classList.add("is-copy-armed");
+    if (swap.ghost) swap.ghost.classList.add("is-copy");
+    try {
+      if (navigator.vibrate) navigator.vibrate(12);
+    } catch (error) {
+      return;
+    }
+  }
+
   function endSwap() {
     if (!swap) return;
+    if (swap.holdTimer) clearTimeout(swap.holdTimer);
     clearSwapTarget();
     swap.controller.cell.classList.remove("is-swap-source");
+    swap.controller.cell.classList.remove("is-copy-armed");
     document.body.classList.remove("is-swapping");
     if (swap.ghost) swap.ghost.remove();
     swap = null;
@@ -482,7 +511,7 @@
     copy.style.left = (parseFloat(img.style.left) || 0) * (laidOut ? zoom : 1) + "px";
     copy.style.top = (parseFloat(img.style.top) || 0) * (laidOut ? zoom : 1) + "px";
     ghost.appendChild(copy);
-    if (event.ctrlKey) ghost.classList.add("is-copy");
+    if (event.ctrlKey || swap.copy) ghost.classList.add("is-copy");
     ghost.style.fontSize = Math.max(13, Math.round(rect.width * 0.24)) + "px";
     document.body.appendChild(ghost);
     swap.ghost = ghost;
@@ -495,6 +524,10 @@
     const dy = event.clientY - swap.startY;
     if (!swap.active) {
       if (dx * dx + dy * dy < 36) return;
+      if (swap.holdTimer) {
+        clearTimeout(swap.holdTimer);
+        swap.holdTimer = null;
+      }
       swap.active = true;
       swap.controller.cell.classList.add("is-swap-source");
       document.body.classList.add("is-swapping");
@@ -502,7 +535,7 @@
     }
     swap.ghost.style.left = event.clientX + "px";
     swap.ghost.style.top = event.clientY + "px";
-    swap.ghost.classList.toggle("is-copy", event.ctrlKey);
+    swap.ghost.classList.toggle("is-copy", Boolean(event.ctrlKey) || swap.copy);
     const over = cellAtPoint(event.clientX, event.clientY);
     const next = over && over !== swap.controller ? over : null;
     if (next === swap.over) return;
@@ -516,6 +549,7 @@
     const source = swap.controller;
     const target = swap.active ? swap.over : null;
     const moved = swap.active;
+    const copying = Boolean(event.ctrlKey) || Boolean(swap.copy);
     endSwap();
     if (!moved) return;
     ignoreClick = true;
@@ -523,7 +557,7 @@
       ignoreClick = false;
     }, 0);
     if (target && target !== source) {
-      if (event.ctrlKey) copyOnto(source, target);
+      if (copying) copyOnto(source, target);
       else exchange(source, target);
     }
   }
@@ -556,9 +590,20 @@
       startY: event.clientY,
       active: false,
       over: null,
-      ghost: null
+      ghost: null,
+      copy: touchCopyMode() === "fingers" && pointers.size >= 2,
+      holdTimer: null
     };
+    if (swap.copy) swap.controller.cell.classList.add("is-copy-armed");
+    if (touchCopyMode() === "hold") {
+      swap.holdTimer = setTimeout(armCopy, 460);
+    }
   });
+
+  window.addEventListener("pointerdown", function (event) {
+    pointers.add(event.pointerId);
+    if (swap && touchCopyMode() === "fingers" && pointers.size >= 2) armCopy();
+  }, true);
 
   window.addEventListener("pointermove", function (event) {
     if (drag && event.pointerId === drag.pointerId) {
@@ -574,7 +619,12 @@
     moveSwap(event);
   });
 
+  function releasePointer(event) {
+    pointers.delete(event.pointerId);
+  }
+
   window.addEventListener("pointerup", function (event) {
+    releasePointer(event);
     if (drag && event.pointerId === drag.pointerId) {
       drag.controller.frame.classList.remove("is-dragging");
       drag = null;
@@ -584,12 +634,17 @@
   });
 
   window.addEventListener("pointercancel", function (event) {
+    releasePointer(event);
     if (drag && event.pointerId === drag.pointerId) {
       drag.controller.frame.classList.remove("is-dragging");
       drag = null;
       return;
     }
     finishSwap(event);
+  });
+
+  sheet.addEventListener("contextmenu", function (event) {
+    if (event.target.closest(".cell")) event.preventDefault();
   });
 
   sheet.addEventListener("wheel", function (event) {
@@ -686,7 +741,7 @@
   });
 
   window.addEventListener("keyup", function (event) {
-    if (event.key === "Control" && swap && swap.ghost) swap.ghost.classList.remove("is-copy");
+    if (event.key === "Control" && swap && swap.ghost && !swap.copy) swap.ghost.classList.remove("is-copy");
   });
 
   document.getElementById("print").addEventListener("click", function () {
@@ -728,7 +783,10 @@
     applyViewScale();
   }
 
-  window.addEventListener("resize", fit);
+  window.addEventListener("resize", function () {
+    if (selected) syncInspector();
+    fit();
+  });
   render(sizeFromHash());
   syncHash(currentKey);
 

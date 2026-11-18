@@ -458,6 +458,22 @@ body.is-swapping * {
       0 0 0 1.8mm rgba(154, 52, 18, 0.28);
   }
 
+  .cell.is-copy-armed::before {
+    content: "+";
+    position: absolute;
+    z-index: 5;
+    left: 62%;
+    top: 62%;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #9a3412;
+    color: #fff;
+    font: 700 16px/22px system-ui, sans-serif;
+    text-align: center;
+    pointer-events: none;
+  }
+
   .sheet {
     transform: scale(var(--scale));
     transform-origin: top left;
@@ -581,6 +597,12 @@ body.is-swapping * {
   #center {
     grid-column: 1 / -1;
     min-height: 40px;
+  }
+}
+
+@media (pointer: coarse) and (min-width: 600px) {
+  .sheet {
+    touch-action: none;
   }
 }
 
