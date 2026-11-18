@@ -206,6 +206,11 @@ body {
   cursor: pointer;
 }
 
+.cell.has-image .frame {
+  cursor: grab;
+  touch-action: none;
+}
+
 .frame img {
   position: absolute;
   display: block;
@@ -225,6 +230,43 @@ body {
 
 .cell.is-adjusting .frame.is-dragging {
   cursor: grabbing;
+}
+
+.swap-ghost {
+  position: fixed;
+  z-index: 8;
+  border-radius: 50%;
+  overflow: hidden;
+  pointer-events: none;
+  box-shadow: 0 14px 30px rgba(28, 25, 23, 0.28);
+  transform: translate(-50%, -50%);
+}
+
+.swap-ghost img {
+  position: absolute;
+  display: block;
+  max-width: none;
+}
+
+.swap-ghost.is-copy::after {
+  content: "+";
+  position: absolute;
+  z-index: 1;
+  left: 62%;
+  top: 62%;
+  width: 1.15em;
+  height: 1.15em;
+  border-radius: 50%;
+  background: #9a3412;
+  color: #fff;
+  font-weight: 700;
+  line-height: 1.15em;
+  text-align: center;
+}
+
+body.is-swapping,
+body.is-swapping * {
+  cursor: grabbing !important;
 }
 
 .cut {
@@ -402,6 +444,17 @@ body {
   .cell.is-adjusting .cut {
     border-color: #9a3412;
     border-width: 0.5mm;
+  }
+
+  .cell.is-swap-source {
+    opacity: 0.28;
+  }
+
+  .cell.is-swap-target {
+    z-index: 3;
+    box-shadow:
+      0 0 0 0.7mm #9a3412,
+      0 0 0 1.8mm rgba(154, 52, 18, 0.28);
   }
 
   .sheet {

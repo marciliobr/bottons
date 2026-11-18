@@ -31,6 +31,8 @@
   let adjustingCell = null;
   let selected = null;
   let drag = null;
+  let swap = null;
+  let ignoreClick = false;
 
   function sheetScale() {
     const value = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--scale"));
@@ -102,7 +104,7 @@
     adjustButton.classList.toggle("is-on", adjusting);
     inspectorHint.textContent = adjusting
       ? "Arraste a foto. Use a roda ou o controle para ampliar."
-      : "Enquadre a foto deste botton.";
+      : "Arraste para outra posição para trocar de lugar. Segure Control para copiar.";
     zoomInput.value = String(active.state.scale);
     brightnessInput.value = String(active.state.brightness);
     saturationInput.value = String(active.state.saturation);
@@ -136,6 +138,7 @@
   function render(key) {
     if (!SIZES[key]) key = "32";
     if (adjustingCell) adjustingCell.stopAdjust();
+    endSwap();
     selected = null;
     drag = null;
     currentKey = key;
@@ -208,6 +211,7 @@
       setSaturation: setSaturation,
       center: center,
       nudge: nudge,
+      showState: showState,
       pickFile: function () {
         input.click();
       }
@@ -252,6 +256,25 @@
       img.hidden = false;
       cell.classList.add("has-image");
       if (img.complete && img.naturalWidth) layoutImage();
+    }
+
+    function showState() {
+      if (state.url) {
+        cell.classList.add("has-image");
+        img.hidden = false;
+        if (img.src !== state.url) img.src = state.url;
+        else if (img.complete && img.naturalWidth) layoutImage();
+        else applyTone();
+      } else {
+        img.removeAttribute("src");
+        img.hidden = true;
+        img.style.width = "";
+        img.style.height = "";
+        img.style.left = "";
+        img.style.top = "";
+        img.style.filter = "";
+        cell.classList.remove("has-image");
+      }
     }
 
     function stopAdjust() {
@@ -356,7 +379,7 @@
     img.addEventListener("load", layoutImage);
 
     frame.addEventListener("click", function () {
-      if (drag || controller.isAdjusting()) return;
+      if (ignoreClick || drag || controller.isAdjusting()) return;
       if (state.url) select(controller);
       else input.click();
     });
@@ -374,39 +397,199 @@
     return controller;
   }
 
+  function cellAtPoint(x, y) {
+    const cells = sheet.querySelectorAll(".cell");
+    for (let i = cells.length - 1; i >= 0; i -= 1) {
+      const rect = cells[i].getBoundingClientRect();
+      const dx = x - (rect.left + rect.width / 2);
+      const dy = y - (rect.top + rect.height / 2);
+      const radius = rect.width / 2;
+      if (dx * dx + dy * dy <= radius * radius) return cells[i].controller;
+    }
+    return null;
+  }
+
+  function exchange(source, target) {
+    ["url", "scale", "x", "y", "brightness", "saturation"].forEach(function (key) {
+      const hold = source.state[key];
+      source.state[key] = target.state[key];
+      target.state[key] = hold;
+    });
+    if (source.isAdjusting()) source.stopAdjust();
+    if (target.isAdjusting()) target.stopAdjust();
+    source.showState();
+    target.showState();
+    updateCount();
+    if (target.state.url) select(target);
+    else deselect();
+  }
+
+  function copyOnto(source, target) {
+    const from = source.state.url;
+    if (!from) return;
+    fetch(from).then(function (response) {
+      return response.blob();
+    }).then(function (blob) {
+      const url = URL.createObjectURL(blob);
+      if (target.state.url) URL.revokeObjectURL(target.state.url);
+      target.state.url = url;
+      target.state.scale = source.state.scale;
+      target.state.x = source.state.x;
+      target.state.y = source.state.y;
+      target.state.brightness = source.state.brightness;
+      target.state.saturation = source.state.saturation;
+      const live = controllers.filter(function (controller) {
+        return controller.state === target.state;
+      })[0];
+      if (!live) return;
+      if (live.isAdjusting()) live.stopAdjust();
+      live.showState();
+      updateCount();
+      select(live);
+    }).catch(function () {});
+  }
+
+  function clearSwapTarget() {
+    if (!swap || !swap.over) return;
+    swap.over.cell.classList.remove("is-swap-target");
+    swap.over = null;
+  }
+
+  function endSwap() {
+    if (!swap) return;
+    clearSwapTarget();
+    swap.controller.cell.classList.remove("is-swap-source");
+    document.body.classList.remove("is-swapping");
+    if (swap.ghost) swap.ghost.remove();
+    swap = null;
+  }
+
+  function beginSwapGhost(event) {
+    const rect = swap.controller.cell.getBoundingClientRect();
+    const img = swap.controller.frame.querySelector("img");
+    const zoom = sheetScale();
+    const laidOut = Boolean(img.style.width);
+    const ghost = document.createElement("div");
+    const copy = document.createElement("img");
+    ghost.className = "swap-ghost";
+    ghost.style.width = rect.width + "px";
+    ghost.style.height = rect.height + "px";
+    copy.alt = "";
+    copy.src = img.currentSrc || img.src;
+    copy.style.filter = img.style.filter;
+    copy.style.width = (laidOut ? parseFloat(img.style.width) * zoom : rect.width) + "px";
+    copy.style.height = (laidOut ? parseFloat(img.style.height) * zoom : rect.height) + "px";
+    copy.style.left = (parseFloat(img.style.left) || 0) * (laidOut ? zoom : 1) + "px";
+    copy.style.top = (parseFloat(img.style.top) || 0) * (laidOut ? zoom : 1) + "px";
+    ghost.appendChild(copy);
+    if (event.ctrlKey) ghost.classList.add("is-copy");
+    ghost.style.fontSize = Math.max(13, Math.round(rect.width * 0.24)) + "px";
+    document.body.appendChild(ghost);
+    swap.ghost = ghost;
+    swap.ghost.style.left = event.clientX + "px";
+    swap.ghost.style.top = event.clientY + "px";
+  }
+
+  function moveSwap(event) {
+    const dx = event.clientX - swap.startX;
+    const dy = event.clientY - swap.startY;
+    if (!swap.active) {
+      if (dx * dx + dy * dy < 36) return;
+      swap.active = true;
+      swap.controller.cell.classList.add("is-swap-source");
+      document.body.classList.add("is-swapping");
+      beginSwapGhost(event);
+    }
+    swap.ghost.style.left = event.clientX + "px";
+    swap.ghost.style.top = event.clientY + "px";
+    swap.ghost.classList.toggle("is-copy", event.ctrlKey);
+    const over = cellAtPoint(event.clientX, event.clientY);
+    const next = over && over !== swap.controller ? over : null;
+    if (next === swap.over) return;
+    clearSwapTarget();
+    swap.over = next;
+    if (next) next.cell.classList.add("is-swap-target");
+  }
+
+  function finishSwap(event) {
+    if (!swap || event.pointerId !== swap.pointerId) return;
+    const source = swap.controller;
+    const target = swap.active ? swap.over : null;
+    const moved = swap.active;
+    endSwap();
+    if (!moved) return;
+    ignoreClick = true;
+    setTimeout(function () {
+      ignoreClick = false;
+    }, 0);
+    if (target && target !== source) {
+      if (event.ctrlKey) copyOnto(source, target);
+      else exchange(source, target);
+    }
+  }
+
   sheet.addEventListener("pointerdown", function (event) {
     if (event.button !== 0) return;
     const frame = event.target.closest(".frame");
     if (!frame || !sheet.contains(frame)) return;
     const controller = frame.closest(".cell").controller;
-    if (!controller || !controller.isAdjusting()) return;
-    const index = controllers.indexOf(controller);
-    drag = {
+    if (!controller) return;
+    if (controller.isAdjusting()) {
+      const index = controllers.indexOf(controller);
+      drag = {
+        controller: controller,
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        originX: slotsFor(currentKey)[index].x,
+        originY: slotsFor(currentKey)[index].y
+      };
+      controller.frame.classList.add("is-dragging");
+      event.preventDefault();
+      return;
+    }
+    if (!controller.state.url || swap) return;
+    swap = {
       controller: controller,
       pointerId: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
-      originX: slotsFor(currentKey)[index].x,
-      originY: slotsFor(currentKey)[index].y
+      active: false,
+      over: null,
+      ghost: null
     };
-    controller.frame.classList.add("is-dragging");
-    event.preventDefault();
   });
 
   window.addEventListener("pointermove", function (event) {
-    if (!drag || event.pointerId !== drag.pointerId) return;
-    const index = controllers.indexOf(drag.controller);
-    const state = slotsFor(currentKey)[index];
-    const zoom = sheetScale();
-    state.x = drag.originX + (event.clientX - drag.startX) / zoom;
-    state.y = drag.originY + (event.clientY - drag.startY) / zoom;
-    drag.controller.layout();
+    if (drag && event.pointerId === drag.pointerId) {
+      const index = controllers.indexOf(drag.controller);
+      const state = slotsFor(currentKey)[index];
+      const zoom = sheetScale();
+      state.x = drag.originX + (event.clientX - drag.startX) / zoom;
+      state.y = drag.originY + (event.clientY - drag.startY) / zoom;
+      drag.controller.layout();
+      return;
+    }
+    if (!swap || event.pointerId !== swap.pointerId) return;
+    moveSwap(event);
   });
 
   window.addEventListener("pointerup", function (event) {
-    if (!drag || event.pointerId !== drag.pointerId) return;
-    drag.controller.frame.classList.remove("is-dragging");
-    drag = null;
+    if (drag && event.pointerId === drag.pointerId) {
+      drag.controller.frame.classList.remove("is-dragging");
+      drag = null;
+      return;
+    }
+    finishSwap(event);
+  });
+
+  window.addEventListener("pointercancel", function (event) {
+    if (drag && event.pointerId === drag.pointerId) {
+      drag.controller.frame.classList.remove("is-dragging");
+      drag = null;
+      return;
+    }
+    finishSwap(event);
   });
 
   sheet.addEventListener("wheel", function (event) {
@@ -483,6 +666,7 @@
   });
 
   window.addEventListener("keydown", function (event) {
+    if (event.key === "Control" && swap && swap.ghost) swap.ghost.classList.add("is-copy");
     if (event.key === "Escape" && adjustingCell) {
       adjustingCell.stopAdjust();
       return;
@@ -501,12 +685,17 @@
     selected.nudge(move[0], move[1]);
   });
 
+  window.addEventListener("keyup", function (event) {
+    if (event.key === "Control" && swap && swap.ghost) swap.ghost.classList.remove("is-copy");
+  });
+
   document.getElementById("print").addEventListener("click", function () {
     if (adjustingCell) adjustingCell.stopAdjust();
     window.print();
   });
 
   window.addEventListener("beforeprint", function () {
+    endSwap();
     document.documentElement.style.setProperty("--scale", "1");
     controllers.forEach(function (controller) {
       controller.layout();
