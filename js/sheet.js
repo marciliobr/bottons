@@ -717,9 +717,12 @@
     const stage = document.querySelector(".stage");
     const stageStyle = stage ? getComputedStyle(stage) : null;
     const padX = stageStyle ? parseFloat(stageStyle.paddingLeft) + parseFloat(stageStyle.paddingRight) : 0;
-    const padY = stageStyle ? parseFloat(stageStyle.paddingTop) + parseFloat(stageStyle.paddingBottom) : 0;
+    const padTop = stageStyle ? parseFloat(stageStyle.paddingTop) : 0;
+    const padBottom = stageStyle ? parseFloat(stageStyle.paddingBottom) : 0;
+    const inspectorBlock = inspector && !inspector.hidden ? inspector.offsetHeight + 18 : 0;
+    document.documentElement.style.setProperty("--inspector-space", inspectorBlock ? inspectorBlock + "px" : "0px");
     const availW = document.documentElement.clientWidth - padX;
-    const availH = window.innerHeight - toolbarHeight - padY;
+    const availH = window.innerHeight - toolbarHeight - padTop - (inspectorBlock || padBottom);
     const nextFit = Math.min(1, availW / sheet.offsetWidth, availH / sheet.offsetHeight);
     pageFit = nextFit > 0 ? nextFit : 1;
     applyViewScale();
