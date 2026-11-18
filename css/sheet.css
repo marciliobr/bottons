@@ -393,6 +393,13 @@ body.is-swapping * {
   accent-color: var(--ink);
 }
 
+.inspector-rotate {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
 @media screen {
   html {
     min-height: 100%;
@@ -604,8 +611,13 @@ body.is-swapping * {
     min-width: 0;
   }
 
-  #center {
+  .inspector-rotate {
     grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1.4fr;
+  }
+
+  .inspector-rotate button {
     min-height: 40px;
   }
 }

@@ -1,4 +1,4 @@
-const CACHE = "bottons-v11";
+const CACHE = "bottons-v12";
 const ASSETS = [
   "./",
   "./index.html",

@@ -71,13 +71,20 @@
       <label class="tone-field" for="zoom">Zoom
         <input type="range" id="zoom" min="0.25" max="4" step="0.01" value="1">
       </label>
+      <label class="tone-field" for="rotation">Rotação
+        <input type="range" id="rotation" min="0" max="360" step="1" value="0">
+      </label>
       <label class="tone-field" for="brightness">Brilho
         <input type="range" id="brightness" min="0.4" max="1.8" step="0.01" value="1">
       </label>
       <label class="tone-field" for="saturation">Saturação
         <input type="range" id="saturation" min="0" max="2" step="0.01" value="1">
       </label>
-      <button type="button" id="center">Centralizar</button>
+      <div class="inspector-rotate">
+        <button type="button" id="rotate-left" aria-label="Girar 90° para a esquerda" title="Girar 90° à esquerda">↺ 90°</button>
+        <button type="button" id="rotate-right" aria-label="Girar 90° para a direita" title="Girar 90° à direita">↻ 90°</button>
+        <button type="button" id="center">Centralizar</button>
+      </div>
     </div>
   </aside>
   <script src="js/sheet.js"></script>
