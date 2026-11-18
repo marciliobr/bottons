@@ -9,8 +9,8 @@
   const fitScale = 1;
   const maxScale = 4;
   const sheet = document.getElementById("sheet");
-  const heading = document.querySelector(".toolbar h1");
   const countLabel = document.getElementById("count");
+  const sizeMark = document.getElementById("size-mark");
   const inspector = document.getElementById("inspector");
   const inspectorHint = document.getElementById("inspector-hint");
   const adjustButton = document.getElementById("adjust");
@@ -18,6 +18,7 @@
   const rotationInput = document.getElementById("rotation");
   const brightnessInput = document.getElementById("brightness");
   const saturationInput = document.getElementById("saturation");
+  const themeButton = document.getElementById("theme");
   const minBrightness = 0.4;
   const maxBrightness = 1.8;
   const minSaturation = 0;
@@ -87,6 +88,32 @@
     document.querySelectorAll("[data-size]").forEach(function (button) {
       button.setAttribute("aria-pressed", button.dataset.size === key ? "true" : "false");
     });
+  }
+
+  function syncThemeButton() {
+    const dark = document.documentElement.dataset.theme === "dark";
+    if (!themeButton) return;
+    themeButton.setAttribute("aria-pressed", dark ? "true" : "false");
+    themeButton.setAttribute("aria-label", dark ? "Usar tema claro" : "Usar tema escuro");
+    themeButton.title = dark ? "Tema claro" : "Tema escuro";
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute("content", dark ? "#1c1917" : "#faf8f5");
+  }
+
+  function setTheme(theme) {
+    if (theme === "dark") document.documentElement.dataset.theme = "dark";
+    else delete document.documentElement.dataset.theme;
+    try {
+      localStorage.setItem("may-bottons-theme", theme);
+    } catch (error) {}
+    syncThemeButton();
+  }
+
+  if (themeButton) {
+    themeButton.addEventListener("click", function () {
+      setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
+    });
+    syncThemeButton();
   }
 
   function updateCount() {
@@ -166,9 +193,8 @@
     currentKey = key;
     const spec = SIZES[key];
     const slots = slotsFor(key);
-    const title = "May Bottons " + spec.diameter + " mm";
 
-    if (heading) heading.textContent = title;
+    if (sizeMark) sizeMark.textContent = spec.diameter + " mm";
     setSizePressed(key);
     document.documentElement.style.setProperty("--diameter", spec.diameter + "mm");
     document.documentElement.style.setProperty("--cut", spec.cut + "mm");

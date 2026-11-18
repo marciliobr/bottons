@@ -1,9 +1,10 @@
-const CACHE = "bottons-v14";
+const CACHE = "bottons-v16";
 const ASSETS = [
   "./",
   "./index.html",
   "./css/sheet.css",
   "./css/doodles.svg",
+  "./css/doodles-dark.svg",
   "./js/sheet.js",
   "./manifest.webmanifest",
   "./favicon.png",

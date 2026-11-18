@@ -21,6 +21,13 @@
   <meta name="twitter:description" content="Folha A4 para montar e imprimir bottons de 32, 44 e 58 mm.">
   <meta name="twitter:image" content="https://marciliobr.github.io/bottons/og.jpg">
   <meta name="theme-color" content="#faf8f5">
+  <script>
+    try {
+      if (localStorage.getItem("may-bottons-theme") === "dark") {
+        document.documentElement.setAttribute("data-theme", "dark");
+      }
+    } catch (e) {}
+  </script>
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="May Bottons">
@@ -34,9 +41,21 @@
     <div class="brand">
       <img class="logo" src="icons/logo.png" alt="" width="40" height="40">
       <div>
-        <h1>May Bottons 32 mm</h1>
+        <h1>
+          <span class="wordmark"><span class="wordmark-may">May</span> <span class="wordmark-name">Bottons</span></span>
+          <span class="size-pill" id="size-mark">32 mm</span>
+        </h1>
         <p id="count">0 de 24 · corte 44 mm</p>
       </div>
+      <button type="button" id="theme" class="theme-toggle" aria-pressed="false" aria-label="Usar tema escuro" title="Tema escuro">
+        <svg class="icon-moon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M15.5 3.5a8.5 8.5 0 1 0 5 14.5A7 7 0 0 1 15.5 3.5z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
+        </svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="12" r="3.5" fill="none" stroke="currentColor" stroke-width="1.7"/>
+          <path d="M12 3.5v2.2M12 18.3v2.2M3.5 12h2.2M18.3 12h2.2M6 6l1.6 1.6M16.4 16.4 18 18M18 6l-1.6 1.6M7.6 16.4 6 18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+        </svg>
+      </button>
     </div>
     <div class="toolbar-actions">
       <div class="sizes" role="group" aria-label="Tamanho">
