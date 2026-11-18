@@ -15,6 +15,7 @@
   const inspectorHint = document.getElementById("inspector-hint");
   const adjustButton = document.getElementById("adjust");
   const zoomInput = document.getElementById("zoom");
+  const rotationInput = document.getElementById("rotation");
   const brightnessInput = document.getElementById("brightness");
   const saturationInput = document.getElementById("saturation");
   const minBrightness = 0.4;
@@ -70,7 +71,7 @@
     const total = spec.cols * spec.rows;
     if (!memory[key]) {
       memory[key] = Array.from({ length: total }, function () {
-        return { url: null, scale: fitScale, x: 0, y: 0, brightness: 1, saturation: 1 };
+        return { url: null, scale: fitScale, x: 0, y: 0, rotation: 0, brightness: 1, saturation: 1 };
       });
     }
     return memory[key];
@@ -108,8 +109,14 @@
       ? adjustHint()
       : copyHint();
     zoomInput.value = String(active.state.scale);
+    rotationInput.value = String(normalizeRotation(active.state.rotation));
     brightnessInput.value = String(active.state.brightness);
     saturationInput.value = String(active.state.saturation);
+  }
+
+  function normalizeRotation(value) {
+    const angle = ((Number(value) || 0) % 360 + 360) % 360;
+    return Math.round(angle * 100) / 100;
   }
 
   function select(controller) {
@@ -212,6 +219,8 @@
       setImage: setImage,
       zoomAt: zoomAt,
       setScale: setScale,
+      setRotation: setRotation,
+      rotateBy: rotateBy,
       setBrightness: setBrightness,
       setSaturation: setSaturation,
       center: center,
@@ -239,6 +248,7 @@
 
     function layoutImage() {
       applyTone();
+      state.rotation = normalizeRotation(state.rotation);
       if (img.hidden || !img.naturalWidth) return;
       const frameW = frame.offsetWidth;
       const frameH = frame.offsetHeight;
@@ -254,7 +264,12 @@
       img.style.height = height + "px";
       img.style.left = (frameW - width) / 2 + state.x + "px";
       img.style.top = (frameH - height) / 2 + state.y + "px";
-      if (selected === controller) zoomInput.value = String(state.scale);
+      img.style.transformOrigin = "center center";
+      img.style.transform = "rotate(" + state.rotation + "deg)";
+      if (selected === controller) {
+        zoomInput.value = String(state.scale);
+        rotationInput.value = String(state.rotation);
+      }
     }
 
     function showImage() {
@@ -277,6 +292,7 @@
         img.style.height = "";
         img.style.left = "";
         img.style.top = "";
+        img.style.transform = "";
         img.style.filter = "";
         cell.classList.remove("has-image");
       }
@@ -305,6 +321,7 @@
       state.scale = fitScale;
       state.x = 0;
       state.y = 0;
+      state.rotation = 0;
       state.brightness = 1;
       state.saturation = 1;
       img.removeAttribute("src");
@@ -313,6 +330,7 @@
       img.style.height = "";
       img.style.left = "";
       img.style.top = "";
+      img.style.transform = "";
       img.style.filter = "";
       input.value = "";
       cell.classList.remove("has-image");
@@ -331,6 +349,7 @@
       state.scale = fitScale;
       state.x = 0;
       state.y = 0;
+      state.rotation = 0;
       state.brightness = 1;
       state.saturation = 1;
       img.src = state.url;
@@ -342,6 +361,16 @@
 
     function setScale(value) {
       state.scale = Math.max(minScale, Math.min(maxScale, value));
+      layoutImage();
+    }
+
+    function setRotation(value) {
+      state.rotation = normalizeRotation(value);
+      layoutImage();
+    }
+
+    function rotateBy(delta) {
+      state.rotation = normalizeRotation((state.rotation || 0) + delta);
       layoutImage();
     }
 
@@ -359,6 +388,7 @@
       state.scale = fitScale;
       state.x = 0;
       state.y = 0;
+      state.rotation = 0;
       layoutImage();
     }
 
@@ -445,6 +475,7 @@
         scale: state.scale,
         x: state.x,
         y: state.y,
+        rotation: normalizeRotation(state.rotation),
         brightness: state.brightness == null ? 1 : state.brightness,
         saturation: state.saturation == null ? 1 : state.saturation
       };
@@ -497,6 +528,7 @@
       state.scale = saved.scale;
       state.x = saved.x;
       state.y = saved.y;
+      state.rotation = normalizeRotation(saved.rotation);
       state.brightness = saved.brightness;
       state.saturation = saved.saturation;
     });
@@ -530,7 +562,7 @@
 
   function exchange(source, target) {
     pushHistory(currentKey);
-    ["url", "scale", "x", "y", "brightness", "saturation"].forEach(function (key) {
+    ["url", "scale", "x", "y", "rotation", "brightness", "saturation"].forEach(function (key) {
       const hold = source.state[key];
       source.state[key] = target.state[key];
       target.state[key] = hold;
@@ -559,6 +591,7 @@
       targetState.scale = source.state.scale;
       targetState.x = source.state.x;
       targetState.y = source.state.y;
+      targetState.rotation = normalizeRotation(source.state.rotation);
       targetState.brightness = source.state.brightness;
       targetState.saturation = source.state.saturation;
       const live = currentKey === key ? controllers.filter(function (controller) {
@@ -673,6 +706,8 @@
     copy.alt = "";
     copy.src = img.currentSrc || img.src;
     copy.style.filter = img.style.filter;
+    copy.style.transform = img.style.transform;
+    copy.style.transformOrigin = "center center";
     copy.style.width = (laidOut ? parseFloat(img.style.width) * zoom : rect.width) + "px";
     copy.style.height = (laidOut ? parseFloat(img.style.height) * zoom : rect.height) + "px";
     copy.style.left = (parseFloat(img.style.left) || 0) * (laidOut ? zoom : 1) + "px";
@@ -939,8 +974,20 @@
     if (selected) selected.center();
   });
 
+  document.getElementById("rotate-left").addEventListener("click", function () {
+    if (selected) selected.rotateBy(-90);
+  });
+
+  document.getElementById("rotate-right").addEventListener("click", function () {
+    if (selected) selected.rotateBy(90);
+  });
+
   zoomInput.addEventListener("input", function () {
     if (selected) selected.setScale(Number(zoomInput.value));
+  });
+
+  rotationInput.addEventListener("input", function () {
+    if (selected) selected.setRotation(Number(rotationInput.value));
   });
 
   brightnessInput.addEventListener("input", function () {
