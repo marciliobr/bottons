@@ -141,7 +141,7 @@
     currentKey = key;
     const spec = SIZES[key];
     const slots = slotsFor(key);
-    const title = "Bottons " + spec.diameter + " mm";
+    const title = "May Bottons " + spec.diameter + " mm";
 
     if (heading) heading.textContent = title;
     setSizePressed(key);
@@ -539,4 +539,30 @@
   window.addEventListener("resize", fit);
   render(sizeFromHash());
   syncHash(currentKey);
+
+  const installButton = document.getElementById("install");
+  let installPrompt = null;
+
+  window.addEventListener("beforeinstallprompt", function (event) {
+    event.preventDefault();
+    installPrompt = event;
+    installButton.hidden = false;
+  });
+
+  installButton.addEventListener("click", function () {
+    if (!installPrompt) return;
+    const prompt = installPrompt;
+    installPrompt = null;
+    installButton.hidden = true;
+    prompt.prompt();
+  });
+
+  window.addEventListener("appinstalled", function () {
+    installPrompt = null;
+    installButton.hidden = true;
+  });
+
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("sw.js");
+  }
 })();

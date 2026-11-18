@@ -3,16 +3,40 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Bottons — folha A4</title>
-  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <title>May Bottons</title>
+  <meta name="description" content="Folha A4 para montar e imprimir bottons de 32, 44 e 58 mm.">
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="pt_BR">
+  <meta property="og:site_name" content="May Bottons">
+  <meta property="og:title" content="May Bottons">
+  <meta property="og:description" content="Folha A4 para montar e imprimir bottons de 32, 44 e 58 mm.">
+  <meta property="og:url" content="https://marciliobr.github.io/bottons/">
+  <meta property="og:image" content="https://marciliobr.github.io/bottons/og.jpg">
+  <meta property="og:image:type" content="image/jpeg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Botton com um gatinho ruivo, o ícone do May Bottons">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="May Bottons">
+  <meta name="twitter:description" content="Folha A4 para montar e imprimir bottons de 32, 44 e 58 mm.">
+  <meta name="twitter:image" content="https://marciliobr.github.io/bottons/og.jpg">
+  <meta name="theme-color" content="#faf8f5">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="May Bottons">
+  <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="favicon.png" type="image/png" sizes="32x32">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
   <link rel="stylesheet" href="css/sheet.css">
 </head>
 <body>
   <header class="toolbar">
     <div class="brand">
-      <h1>Bottons 32 mm</h1>
-      <p id="count">0 de 24 · corte 44 mm</p>
+      <img class="logo" src="icons/logo.png" alt="" width="40" height="40">
+      <div>
+        <h1>May Bottons 32 mm</h1>
+        <p id="count">0 de 24 · corte 44 mm</p>
+      </div>
     </div>
     <div class="toolbar-actions">
       <div class="sizes" role="group" aria-label="Tamanho">
@@ -26,6 +50,7 @@
         <button type="button" id="view-in" aria-label="Ampliar a folha">+</button>
       </div>
       <button type="button" id="clear">Limpar tudo</button>
+      <button type="button" id="install" hidden>Instalar</button>
       <button type="button" id="print">Imprimir</button>
     </div>
   </header>
