@@ -103,7 +103,7 @@
     adjustButton.textContent = adjusting ? "Concluir" : "Ajustar";
     adjustButton.classList.toggle("is-on", adjusting);
     inspectorHint.textContent = adjusting
-      ? "Arraste a foto. Use a roda ou o controle para ampliar."
+      ? adjustHint()
       : copyHint();
     zoomInput.value = String(active.state.scale);
     brightnessInput.value = String(active.state.brightness);
@@ -139,6 +139,7 @@
     if (!SIZES[key]) key = "32";
     if (adjustingCell) adjustingCell.stopAdjust();
     endSwap();
+    pinch = null;
     selected = null;
     drag = null;
     currentKey = key;
@@ -241,8 +242,8 @@
       const cover = Math.max(frameW / img.naturalWidth, frameH / img.naturalHeight);
       const width = img.naturalWidth * cover * state.scale;
       const height = img.naturalHeight * cover * state.scale;
-      const maxX = Math.abs(width - frameW) / 2;
-      const maxY = Math.abs(height - frameH) / 2;
+      const maxX = Math.max(width, frameW) / 2;
+      const maxY = Math.max(height, frameH) / 2;
       state.x = Math.max(-maxX, Math.min(maxX, state.x));
       state.y = Math.max(-maxY, Math.min(maxY, state.y));
       img.style.width = width + "px";
@@ -397,10 +398,15 @@
     return controller;
   }
 
+  function adjustHint() {
+    if (window.matchMedia("(pointer: coarse)").matches) return "Arraste a foto. Pinçe para ampliar.";
+    return "Arraste a foto. Use a roda ou o controle para ampliar.";
+  }
+
   function copyHint() {
     const mode = touchCopyMode();
-    if (mode === "fingers") return "Arraste para trocar de lugar. Com dois dedos, copia.";
-    if (mode === "hold") return "Arraste para trocar de lugar. Segure um instante para copiar.";
+    if (mode === "fingers") return "Arraste para trocar de lugar. Com dois dedos, copia. Pinçe para ampliar a folha.";
+    if (mode === "hold") return "Arraste para trocar de lugar. Segure um instante para copiar. Pinçe para ampliar a folha.";
     return "Arraste para outra posição para trocar de lugar. Segure Control para copiar.";
   }
 
@@ -468,7 +474,61 @@
     swap.over = null;
   }
 
-  const pointers = new Set();
+  const pointers = new Map();
+  let pinch = null;
+  let pinchBlocksClick = false;
+
+  function rememberPointer(event) {
+    const onStage = Boolean(event.target.closest && event.target.closest(".stage"));
+    const current = pointers.get(event.pointerId);
+    if (current) {
+      current.x = event.clientX;
+      current.y = event.clientY;
+      return;
+    }
+    pointers.set(event.pointerId, {
+      x: event.clientX,
+      y: event.clientY,
+      onStage: onStage
+    });
+  }
+
+  function pinchDistance() {
+    const pts = Array.from(pointers.values());
+    if (pts.length < 2) return 0;
+    return Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+  }
+
+  function pinchOnStage() {
+    let found = false;
+    pointers.forEach(function (point) {
+      if (point.onStage) found = true;
+    });
+    return found;
+  }
+
+  function beginPinch() {
+    if (!window.matchMedia("(pointer: coarse)").matches || !pinchOnStage()) return;
+    const dist = pinchDistance();
+    if (dist < 8) return;
+    pinch = {
+      dist: dist,
+      view: viewZoom,
+      scale: adjustingCell ? adjustingCell.state.scale : 1,
+      photo: adjustingCell
+    };
+    pinchBlocksClick = true;
+    ignoreClick = true;
+  }
+
+  function applyPinch() {
+    if (!pinch) return;
+    const dist = pinchDistance();
+    if (!dist) return;
+    const ratio = dist / pinch.dist;
+    if (pinch.photo && pinch.photo.isAdjusting()) pinch.photo.setScale(pinch.scale * ratio);
+    else setViewZoom(pinch.view * ratio);
+  }
 
   function armCopy() {
     if (!swap) return;
@@ -563,6 +623,7 @@
   }
 
   sheet.addEventListener("pointerdown", function (event) {
+    if (pinch || pointers.size >= 2) return;
     if (event.button !== 0) return;
     const frame = event.target.closest(".frame");
     if (!frame || !sheet.contains(frame)) return;
@@ -601,11 +662,32 @@
   });
 
   window.addEventListener("pointerdown", function (event) {
-    pointers.add(event.pointerId);
-    if (swap && touchCopyMode() === "fingers" && pointers.size >= 2) armCopy();
+    rememberPointer(event);
+    if (swap && swap.active && touchCopyMode() === "fingers" && pointers.size >= 2) {
+      armCopy();
+      return;
+    }
+    if (pointers.size >= 2 && !(swap && swap.active)) {
+      if (swap) endSwap();
+      if (drag) {
+        drag.controller.frame.classList.remove("is-dragging");
+        drag = null;
+      }
+      beginPinch();
+    }
   }, true);
 
   window.addEventListener("pointermove", function (event) {
+    if (pointers.has(event.pointerId)) {
+      const point = pointers.get(event.pointerId);
+      point.x = event.clientX;
+      point.y = event.clientY;
+    }
+    if (pinch && pointers.size >= 2) {
+      applyPinch();
+      event.preventDefault();
+      return;
+    }
     if (drag && event.pointerId === drag.pointerId) {
       const index = controllers.indexOf(drag.controller);
       const state = slotsFor(currentKey)[index];
@@ -617,10 +699,18 @@
     }
     if (!swap || event.pointerId !== swap.pointerId) return;
     moveSwap(event);
-  });
+  }, { passive: false });
 
   function releasePointer(event) {
     pointers.delete(event.pointerId);
+    if (pinch && pointers.size < 2) pinch = null;
+    if (!pointers.size && pinchBlocksClick) {
+      pinchBlocksClick = false;
+      ignoreClick = true;
+      setTimeout(function () {
+        ignoreClick = false;
+      }, 0);
+    }
   }
 
   window.addEventListener("pointerup", function (event) {

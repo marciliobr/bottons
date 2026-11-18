@@ -201,6 +201,7 @@ body {
   inset: 0;
   overflow: hidden;
   border-radius: 50%;
+  background: #fff;
 }
 
 .cell:not(.has-image) .frame {
@@ -600,9 +601,10 @@ body.is-swapping * {
   }
 }
 
-@media (pointer: coarse) and (min-width: 600px) {
+@media (pointer: coarse) {
+  .stage,
   .sheet {
-    touch-action: none;
+    touch-action: pan-x pan-y;
   }
 }
 
