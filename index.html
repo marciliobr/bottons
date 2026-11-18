@@ -3,22 +3,25 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Bottons 32 mm — A4</title>
+  <title>Bottons — folha A4</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="favicon.png" type="image/png" sizes="32x32">
   <link rel="stylesheet" href="css/sheet.css">
 </head>
 <body>
   <header class="toolbar">
-    <h1>Bottons 32 mm</h1>
+    <div class="brand">
+      <h1>Bottons 32 mm</h1>
+      <p id="count">0 de 35</p>
+    </div>
     <div class="toolbar-actions">
-      <label class="size-field" for="size">Tamanho
-        <select id="size">
-          <option value="32">32 mm</option>
-          <option value="44">44 mm</option>
-          <option value="58">58 mm</option>
-        </select>
-      </label>
-      <button type="button" id="print">Imprimir</button>
+      <div class="sizes" role="group" aria-label="Tamanho">
+        <button type="button" data-size="32" aria-pressed="true">32</button>
+        <button type="button" data-size="44" aria-pressed="false">44</button>
+        <button type="button" data-size="58" aria-pressed="false">58</button>
+      </div>
       <button type="button" id="clear">Limpar tudo</button>
+      <button type="button" id="print">Imprimir</button>
     </div>
   </header>
   <main class="stage">
@@ -26,6 +29,26 @@
       <div class="sheet" id="sheet"></div>
     </div>
   </main>
+  <aside class="inspector" id="inspector" hidden>
+    <p class="inspector-hint" id="inspector-hint"></p>
+    <div class="inspector-actions">
+      <button type="button" id="replace">Trocar</button>
+      <button type="button" id="adjust">Ajustar</button>
+      <button type="button" id="remove">Remover</button>
+    </div>
+    <div class="inspector-sliders">
+      <label class="tone-field" for="zoom">Zoom
+        <input type="range" id="zoom" min="1" max="4" step="0.01" value="1">
+      </label>
+      <label class="tone-field" for="brightness">Brilho
+        <input type="range" id="brightness" min="0.4" max="1.8" step="0.01" value="1">
+      </label>
+      <label class="tone-field" for="saturation">Saturação
+        <input type="range" id="saturation" min="0" max="2" step="0.01" value="1">
+      </label>
+      <button type="button" id="center">Centralizar</button>
+    </div>
+  </aside>
   <script src="js/sheet.js"></script>
 </body>
 </html>

@@ -8,13 +8,24 @@
   const minScale = 1;
   const maxScale = 4;
   const sheet = document.getElementById("sheet");
-  const sizeSelect = document.getElementById("size");
   const heading = document.querySelector(".toolbar h1");
+  const countLabel = document.getElementById("count");
+  const inspector = document.getElementById("inspector");
+  const inspectorHint = document.getElementById("inspector-hint");
+  const adjustButton = document.getElementById("adjust");
+  const zoomInput = document.getElementById("zoom");
+  const brightnessInput = document.getElementById("brightness");
+  const saturationInput = document.getElementById("saturation");
+  const minBrightness = 0.4;
+  const maxBrightness = 1.8;
+  const minSaturation = 0;
+  const maxSaturation = 2;
   const inset = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--inset")) || 2;
   const memory = {};
   let currentKey = null;
   let controllers = [];
   let adjustingCell = null;
+  let selected = null;
   let drag = null;
 
   function sheetScale() {
@@ -32,7 +43,7 @@
     const total = spec.cols * spec.rows;
     if (!memory[key]) {
       memory[key] = Array.from({ length: total }, function () {
-        return { url: null, scale: minScale, x: 0, y: 0 };
+        return { url: null, scale: minScale, x: 0, y: 0, brightness: 1, saturation: 1 };
       });
     }
     return memory[key];
@@ -44,9 +55,65 @@
     if (current !== next) history.replaceState(null, "", next);
   }
 
+  function setSizePressed(key) {
+    document.querySelectorAll("[data-size]").forEach(function (button) {
+      button.setAttribute("aria-pressed", button.dataset.size === key ? "true" : "false");
+    });
+  }
+
+  function updateCount() {
+    const slots = slotsFor(currentKey);
+    const filled = slots.filter(function (state) {
+      return state.url;
+    }).length;
+    countLabel.textContent = filled + " de " + slots.length;
+  }
+
+  function syncInspector() {
+    const active = selected && selected.state.url ? selected : null;
+    inspector.hidden = !active;
+    document.body.classList.toggle("has-selection", Boolean(active));
+    if (!active) return;
+    const adjusting = active.isAdjusting();
+    adjustButton.textContent = adjusting ? "Concluir" : "Ajustar";
+    adjustButton.classList.toggle("is-on", adjusting);
+    inspectorHint.textContent = adjusting
+      ? "Arraste a foto. Use a roda ou o controle para ampliar."
+      : "Enquadre a foto deste botton.";
+    zoomInput.value = String(active.state.scale);
+    brightnessInput.value = String(active.state.brightness);
+    saturationInput.value = String(active.state.saturation);
+  }
+
+  function select(controller) {
+    if (!controller || !controller.state.url) {
+      deselect();
+      return;
+    }
+    if (selected && selected !== controller) {
+      selected.cell.classList.remove("is-selected");
+      if (selected.isAdjusting()) selected.stopAdjust();
+    }
+    selected = controller;
+    controller.cell.classList.add("is-selected");
+    syncInspector();
+    fit();
+  }
+
+  function deselect() {
+    if (selected) {
+      if (selected.isAdjusting()) selected.stopAdjust();
+      selected.cell.classList.remove("is-selected");
+    }
+    selected = null;
+    syncInspector();
+    fit();
+  }
+
   function render(key) {
     if (!SIZES[key]) key = "32";
     if (adjustingCell) adjustingCell.stopAdjust();
+    selected = null;
     drag = null;
     currentKey = key;
     const spec = SIZES[key];
@@ -54,16 +121,17 @@
     const square = spec.diameter + inset * 2;
     const title = "Bottons " + spec.diameter + " mm";
 
-    document.title = title + " — A4";
     if (heading) heading.textContent = title;
-    sizeSelect.value = key;
+    setSizePressed(key);
     document.documentElement.style.setProperty("--diameter", spec.diameter + "mm");
     sheet.style.gridTemplateColumns = "repeat(" + spec.cols + ", " + square + "mm)";
     sheet.style.gridTemplateRows = "repeat(" + spec.rows + ", " + square + "mm)";
     sheet.replaceChildren();
-    controllers = slots.map(function (state, index) {
-      return createCell(state, index);
+    controllers = slots.map(function (state) {
+      return createCell(state);
     });
+    syncInspector();
+    updateCount();
     fit();
   }
 
@@ -82,51 +150,59 @@
     const circle = document.createElement("div");
     circle.className = "circle";
 
-    const controls = document.createElement("div");
-    controls.className = "controls";
-
-    const pick = document.createElement("button");
-    pick.type = "button";
-    pick.className = "pick";
-    pick.textContent = "Escolher imagem";
-
-    const adjust = document.createElement("button");
-    adjust.type = "button";
-    adjust.className = "adjust";
-    adjust.textContent = "Ajustar";
-    adjust.hidden = true;
-    adjust.title = "Arraste para mover e use a roda do mouse para ampliar";
-
-    const remove = document.createElement("button");
-    remove.type = "button";
-    remove.className = "remove";
-    remove.textContent = "Remover";
-    remove.hidden = true;
+    const addMark = document.createElement("div");
+    addMark.className = "add-mark";
+    addMark.setAttribute("aria-hidden", "true");
 
     const input = document.createElement("input");
     input.type = "file";
     input.accept = "image/*";
+    input.hidden = true;
     input.tabIndex = -1;
 
     frame.appendChild(img);
-    controls.append(pick, adjust, remove, input);
-    cell.append(frame, circle, controls);
+    cell.append(frame, circle, addMark, input);
     sheet.appendChild(cell);
 
     const controller = {
       cell: cell,
       frame: frame,
+      state: state,
       layout: layoutImage,
       stopAdjust: stopAdjust,
+      startAdjust: startAdjust,
       isAdjusting: function () {
         return cell.classList.contains("is-adjusting");
       },
       clearImage: clearImage,
-      zoomAt: zoomAt
+      zoomAt: zoomAt,
+      setScale: setScale,
+      setBrightness: setBrightness,
+      setSaturation: setSaturation,
+      center: center,
+      nudge: nudge,
+      pickFile: function () {
+        input.click();
+      }
     };
     cell.controller = controller;
 
+    function clamp(value, min, max) {
+      return Math.max(min, Math.min(max, value));
+    }
+
+    function applyTone() {
+      state.brightness = clamp(state.brightness == null ? 1 : state.brightness, minBrightness, maxBrightness);
+      state.saturation = clamp(state.saturation == null ? 1 : state.saturation, minSaturation, maxSaturation);
+      img.style.filter = "brightness(" + state.brightness + ") saturate(" + state.saturation + ")";
+      if (selected === controller) {
+        brightnessInput.value = String(state.brightness);
+        saturationInput.value = String(state.saturation);
+      }
+    }
+
     function layoutImage() {
+      applyTone();
       if (img.hidden || !img.naturalWidth) return;
       const frameW = frame.offsetWidth;
       const frameH = frame.offsetHeight;
@@ -142,13 +218,11 @@
       img.style.height = height + "px";
       img.style.left = (frameW - width) / 2 + state.x + "px";
       img.style.top = (frameH - height) / 2 + state.y + "px";
+      if (selected === controller) zoomInput.value = String(state.scale);
     }
 
     function showImage() {
       img.hidden = false;
-      pick.textContent = "Trocar";
-      adjust.hidden = false;
-      remove.hidden = false;
       cell.classList.add("has-image");
       if (img.complete && img.naturalWidth) layoutImage();
     }
@@ -156,15 +230,16 @@
     function stopAdjust() {
       cell.classList.remove("is-adjusting");
       frame.classList.remove("is-dragging");
-      adjust.textContent = "Ajustar";
       if (adjustingCell === controller) adjustingCell = null;
+      if (selected === controller) syncInspector();
     }
 
     function startAdjust() {
+      if (!state.url) return;
       if (adjustingCell && adjustingCell !== controller) adjustingCell.stopAdjust();
       cell.classList.add("is-adjusting");
-      adjust.textContent = "Concluir";
       adjustingCell = controller;
+      select(controller);
     }
 
     function clearImage() {
@@ -176,17 +251,19 @@
       state.scale = minScale;
       state.x = 0;
       state.y = 0;
+      state.brightness = 1;
+      state.saturation = 1;
       img.removeAttribute("src");
       img.hidden = true;
       img.style.width = "";
       img.style.height = "";
       img.style.left = "";
       img.style.top = "";
+      img.style.filter = "";
       input.value = "";
-      pick.textContent = "Escolher imagem";
-      adjust.hidden = true;
-      remove.hidden = true;
       cell.classList.remove("has-image");
+      if (selected === controller) deselect();
+      if (currentKey) updateCount();
     }
 
     function setImage(file) {
@@ -196,8 +273,40 @@
       state.scale = minScale;
       state.x = 0;
       state.y = 0;
+      state.brightness = 1;
+      state.saturation = 1;
       img.src = state.url;
       showImage();
+      updateCount();
+      select(controller);
+    }
+
+    function setScale(value) {
+      state.scale = Math.max(minScale, Math.min(maxScale, value));
+      layoutImage();
+    }
+
+    function setBrightness(value) {
+      state.brightness = clamp(value, minBrightness, maxBrightness);
+      applyTone();
+    }
+
+    function setSaturation(value) {
+      state.saturation = clamp(value, minSaturation, maxSaturation);
+      applyTone();
+    }
+
+    function center() {
+      state.scale = minScale;
+      state.x = 0;
+      state.y = 0;
+      layoutImage();
+    }
+
+    function nudge(dx, dy) {
+      state.x += dx;
+      state.y += dy;
+      layoutImage();
     }
 
     function zoomAt(event) {
@@ -219,25 +328,10 @@
 
     img.addEventListener("load", layoutImage);
 
-    pick.addEventListener("click", function (event) {
-      event.stopPropagation();
-      input.click();
-    });
-
-    adjust.addEventListener("click", function (event) {
-      event.stopPropagation();
-      if (controller.isAdjusting()) stopAdjust();
-      else startAdjust();
-    });
-
     frame.addEventListener("click", function () {
-      if (controller.isAdjusting() || drag) return;
-      input.click();
-    });
-
-    remove.addEventListener("click", function (event) {
-      event.stopPropagation();
-      clearImage();
+      if (drag || controller.isAdjusting()) return;
+      if (state.url) select(controller);
+      else input.click();
     });
 
     input.addEventListener("change", function () {
@@ -259,15 +353,14 @@
     if (!frame || !sheet.contains(frame)) return;
     const controller = frame.closest(".cell").controller;
     if (!controller || !controller.isAdjusting()) return;
-    const slots = slotsFor(currentKey);
     const index = controllers.indexOf(controller);
     drag = {
       controller: controller,
       pointerId: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
-      originX: slots[index].x,
-      originY: slots[index].y
+      originX: slotsFor(currentKey)[index].x,
+      originY: slotsFor(currentKey)[index].y
     };
     controller.frame.classList.add("is-dragging");
     event.preventDefault();
@@ -298,14 +391,65 @@
     controller.zoomAt(event);
   }, { passive: false });
 
-  sizeSelect.addEventListener("change", function () {
-    syncHash(sizeSelect.value);
-    render(sizeSelect.value);
+  document.querySelectorAll("[data-size]").forEach(function (button) {
+    button.addEventListener("click", function () {
+      syncHash(button.dataset.size);
+      render(button.dataset.size);
+    });
   });
 
   window.addEventListener("hashchange", function () {
     const key = sizeFromHash();
     if (key !== currentKey) render(key);
+  });
+
+  document.getElementById("replace").addEventListener("click", function () {
+    if (selected) selected.pickFile();
+  });
+
+  document.getElementById("adjust").addEventListener("click", function () {
+    if (!selected) return;
+    if (selected.isAdjusting()) selected.stopAdjust();
+    else selected.startAdjust();
+  });
+
+  document.getElementById("remove").addEventListener("click", function () {
+    if (selected) selected.clearImage();
+  });
+
+  document.getElementById("center").addEventListener("click", function () {
+    if (selected) selected.center();
+  });
+
+  zoomInput.addEventListener("input", function () {
+    if (selected) selected.setScale(Number(zoomInput.value));
+  });
+
+  brightnessInput.addEventListener("input", function () {
+    if (selected) selected.setBrightness(Number(brightnessInput.value));
+  });
+
+  saturationInput.addEventListener("input", function () {
+    if (selected) selected.setSaturation(Number(saturationInput.value));
+  });
+
+  window.addEventListener("keydown", function (event) {
+    if (event.key === "Escape" && adjustingCell) {
+      adjustingCell.stopAdjust();
+      return;
+    }
+    if (!selected || !selected.state.url) return;
+    if (event.target.closest("input, textarea")) return;
+    const step = selected.frame.offsetWidth * 0.03;
+    const move = {
+      ArrowLeft: [-step, 0],
+      ArrowRight: [step, 0],
+      ArrowUp: [0, -step],
+      ArrowDown: [0, step]
+    }[event.key];
+    if (!move) return;
+    event.preventDefault();
+    selected.nudge(move[0], move[1]);
   });
 
   document.getElementById("print").addEventListener("click", function () {
@@ -325,12 +469,14 @@
     controllers.forEach(function (controller) {
       controller.clearImage();
     });
+    deselect();
+    updateCount();
   });
 
   function fit() {
     const toolbar = document.querySelector(".toolbar");
-    const stage = document.querySelector(".stage");
     const toolbarHeight = toolbar ? toolbar.offsetHeight : 0;
+    const stage = document.querySelector(".stage");
     const stageStyle = stage ? getComputedStyle(stage) : null;
     const padX = stageStyle ? parseFloat(stageStyle.paddingLeft) + parseFloat(stageStyle.paddingRight) : 0;
     const padY = stageStyle ? parseFloat(stageStyle.paddingTop) + parseFloat(stageStyle.paddingBottom) : 0;
