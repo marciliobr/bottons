@@ -61,30 +61,41 @@
     </div>
   </main>
   <aside class="inspector" id="inspector" hidden>
-    <p class="inspector-hint" id="inspector-hint"></p>
+    <div class="inspector-head">
+      <p class="inspector-hint" id="inspector-hint"></p>
+      <button type="button" class="inspector-close" id="inspector-close" aria-label="Fechar edição">×</button>
+    </div>
     <div class="inspector-actions">
       <button type="button" id="replace">Trocar</button>
-      <button type="button" id="adjust">Ajustar</button>
+      <button type="button" id="adjust">Mover</button>
       <button type="button" id="remove">Remover</button>
+      <button type="button" id="center">Redefinir</button>
     </div>
-    <div class="inspector-sliders">
-      <label class="tone-field" for="zoom">Zoom
+    <div class="inspector-fields">
+      <label class="tone-field" for="zoom">
+        <span>Zoom</span>
+        <output id="zoom-value" for="zoom">100%</output>
         <input type="range" id="zoom" min="0.25" max="4" step="0.01" value="1">
       </label>
-      <label class="tone-field" for="rotation">Rotação
-        <input type="range" id="rotation" min="0" max="360" step="1" value="0">
-      </label>
-      <label class="tone-field" for="brightness">Brilho
+      <div class="tone-field tone-rotate">
+        <span id="rotation-label">Rotação</span>
+        <output id="rotation-value" for="rotation">0°</output>
+        <div class="rotate-line">
+          <button type="button" id="rotate-left" aria-label="Girar 90° para a esquerda">↺</button>
+          <input type="range" id="rotation" min="0" max="360" step="1" value="0" aria-labelledby="rotation-label">
+          <button type="button" id="rotate-right" aria-label="Girar 90° para a direita">↻</button>
+        </div>
+      </div>
+      <label class="tone-field" for="brightness">
+        <span>Brilho</span>
+        <output id="brightness-value" for="brightness">100%</output>
         <input type="range" id="brightness" min="0.4" max="1.8" step="0.01" value="1">
       </label>
-      <label class="tone-field" for="saturation">Saturação
+      <label class="tone-field" for="saturation">
+        <span>Saturação</span>
+        <output id="saturation-value" for="saturation">100%</output>
         <input type="range" id="saturation" min="0" max="2" step="0.01" value="1">
       </label>
-      <div class="inspector-rotate">
-        <button type="button" id="rotate-left" aria-label="Girar 90° para a esquerda" title="Girar 90° à esquerda">↺ 90°</button>
-        <button type="button" id="rotate-right" aria-label="Girar 90° para a direita" title="Girar 90° à direita">↻ 90°</button>
-        <button type="button" id="center">Centralizar</button>
-      </div>
     </div>
   </aside>
   <script src="js/sheet.js"></script>

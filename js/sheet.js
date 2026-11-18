@@ -103,7 +103,7 @@
     document.body.classList.toggle("has-selection", Boolean(active));
     if (!active) return;
     const adjusting = active.isAdjusting();
-    adjustButton.textContent = adjusting ? "Concluir" : "Ajustar";
+    adjustButton.textContent = adjusting ? "Concluir" : "Mover";
     adjustButton.classList.toggle("is-on", adjusting);
     inspectorHint.textContent = adjusting
       ? adjustHint()
@@ -112,6 +112,18 @@
     rotationInput.value = String(normalizeRotation(active.state.rotation));
     brightnessInput.value = String(active.state.brightness);
     saturationInput.value = String(active.state.saturation);
+    updateReadouts();
+  }
+
+  function updateReadouts() {
+    const zoomValue = document.getElementById("zoom-value");
+    const rotationValue = document.getElementById("rotation-value");
+    const brightnessValue = document.getElementById("brightness-value");
+    const saturationValue = document.getElementById("saturation-value");
+    if (zoomValue) zoomValue.textContent = Math.round(Number(zoomInput.value) * 100) + "%";
+    if (rotationValue) rotationValue.textContent = Math.round(Number(rotationInput.value)) + "°";
+    if (brightnessValue) brightnessValue.textContent = Math.round(Number(brightnessInput.value) * 100) + "%";
+    if (saturationValue) saturationValue.textContent = Math.round(Number(saturationInput.value) * 100) + "%";
   }
 
   function normalizeRotation(value) {
@@ -269,6 +281,7 @@
       if (selected === controller) {
         zoomInput.value = String(state.scale);
         rotationInput.value = String(state.rotation);
+        updateReadouts();
       }
     }
 
@@ -389,6 +402,8 @@
       state.x = 0;
       state.y = 0;
       state.rotation = 0;
+      state.brightness = 1;
+      state.saturation = 1;
       layoutImage();
     }
 
@@ -956,6 +971,8 @@
     if (key !== currentKey) render(key);
   });
 
+  document.getElementById("inspector-close").addEventListener("click", deselect);
+
   document.getElementById("replace").addEventListener("click", function () {
     if (selected) selected.pickFile();
   });
@@ -984,18 +1001,22 @@
 
   zoomInput.addEventListener("input", function () {
     if (selected) selected.setScale(Number(zoomInput.value));
+    updateReadouts();
   });
 
   rotationInput.addEventListener("input", function () {
     if (selected) selected.setRotation(Number(rotationInput.value));
+    updateReadouts();
   });
 
   brightnessInput.addEventListener("input", function () {
     if (selected) selected.setBrightness(Number(brightnessInput.value));
+    updateReadouts();
   });
 
   saturationInput.addEventListener("input", function () {
     if (selected) selected.setSaturation(Number(saturationInput.value));
+    updateReadouts();
   });
 
   window.addEventListener("keydown", function (event) {
@@ -1067,7 +1088,10 @@
     const padX = stageStyle ? parseFloat(stageStyle.paddingLeft) + parseFloat(stageStyle.paddingRight) : 0;
     const padTop = stageStyle ? parseFloat(stageStyle.paddingTop) : 0;
     const padBottom = stageStyle ? parseFloat(stageStyle.paddingBottom) : 0;
-    const inspectorBlock = inspector && !inspector.hidden ? inspector.offsetHeight + 18 : 0;
+    const inspectorGap = 12;
+    const inspectorBlock = inspector && !inspector.hidden
+      ? Math.round(window.innerHeight - inspector.getBoundingClientRect().top + inspectorGap)
+      : 0;
     document.documentElement.style.setProperty("--inspector-space", inspectorBlock ? inspectorBlock + "px" : "0px");
     const availW = document.documentElement.clientWidth - padX;
     const availH = window.innerHeight - toolbarHeight - padTop - (inspectorBlock || padBottom);
