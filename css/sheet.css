@@ -405,11 +405,13 @@ html[data-theme="dark"] .add-plus {
   overflow: hidden;
 }
 
-.sheet.is-free {
+.sheet.is-free,
+.sheet.is-placed {
   display: block;
 }
 
-.sheet.is-free .cell {
+.sheet.is-free .cell,
+.sheet.is-placed .cell {
   position: absolute;
 }
 

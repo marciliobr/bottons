@@ -1,8 +1,52 @@
 (function () {
   const SIZES = {
-    "32": { diameter: 32, cut: 44, cols: 4, rows: 6, gap: 4 },
-    "44": { diameter: 44, cut: 54, cols: 3, rows: 5, gap: 3.5 },
-    "58": { diameter: 58, cut: 70, cols: 2, rows: 3, gap: 16 }
+    "32": {
+      diameter: 32,
+      cut: 44,
+      places: [
+        [6, 6], [83, 6], [160, 6],
+        [44.5, 30.1], [121.5, 30.1],
+        [6, 54.2], [83, 54.2], [160, 54.2],
+        [44.5, 78.3], [121.5, 78.3],
+        [6, 102.4], [83, 102.4], [160, 102.4],
+        [44.5, 126.5], [121.5, 126.5],
+        [6, 150.6], [83, 150.6], [160, 150.6],
+        [44.5, 174.7], [121.5, 174.7],
+        [6, 198.8], [83, 198.8], [160, 198.8],
+        [44.5, 222.9], [121.5, 222.9],
+        [6, 247], [83, 247], [160, 247]
+      ]
+    },
+    "44": {
+      diameter: 44,
+      cut: 54,
+      places: [
+        [6, 6], [102, 6],
+        [54, 34.875], [150, 34.875],
+        [6, 63.75], [102, 63.75],
+        [54, 92.625], [150, 92.625],
+        [6, 121.5], [102, 121.5],
+        [54, 150.375], [150, 150.375],
+        [6, 179.25], [102, 179.25],
+        [54, 208.125], [150, 208.125],
+        [6, 237], [102, 237]
+      ]
+    },
+    "58": {
+      diameter: 58,
+      cut: 70,
+      places: [
+        [70, 6],
+        [6, 49],
+        [134, 49],
+        [70, 92],
+        [6, 135],
+        [134, 135],
+        [70, 178],
+        [6, 221],
+        [134, 221]
+      ]
+    }
   };
 
   const minScale = 0.25;
@@ -79,8 +123,8 @@
       return memory.livre;
     }
     const spec = SIZES[key];
-    const total = spec.cols * spec.rows;
-    if (!memory[key]) {
+    const total = spec.places ? spec.places.length : spec.cols * spec.rows;
+    if (!memory[key] || memory[key].length !== total) {
       memory[key] = Array.from({ length: total }, function () {
         return { url: null, scale: fitScale, x: 0, y: 0, rotation: 0, brightness: 1, saturation: 1 };
       });
@@ -225,6 +269,7 @@
     if (addSizes) addSizes.hidden = key !== "livre";
     if (key !== "livre") setAddOpen(false);
     sheet.classList.toggle("is-free", key === "livre");
+    sheet.classList.toggle("is-placed", Boolean(SIZES[key] && SIZES[key].places));
     setSizePressed(key);
     sheet.replaceChildren();
     if (key === "livre") {
@@ -239,12 +284,26 @@
       if (sizeMark) sizeMark.textContent = spec.diameter + " mm";
       document.documentElement.style.setProperty("--diameter", spec.diameter + "mm");
       document.documentElement.style.setProperty("--cut", spec.cut + "mm");
-      document.documentElement.style.setProperty("--gap", spec.gap + "mm");
-      sheet.style.gridTemplateColumns = "repeat(" + spec.cols + ", " + spec.cut + "mm)";
-      sheet.style.gridTemplateRows = "repeat(" + spec.rows + ", " + spec.cut + "mm)";
-      controllers = slotsFor(key).map(function (state) {
-        return createCell(state);
-      });
+      if (spec.gap != null) document.documentElement.style.setProperty("--gap", spec.gap + "mm");
+      if (spec.places) {
+        sheet.style.gridTemplateColumns = "";
+        sheet.style.gridTemplateRows = "";
+        controllers = slotsFor(key).map(function (state, index) {
+          const controller = createCell(state);
+          const place = spec.places[index];
+          controller.cell.style.left = place[0] + "mm";
+          controller.cell.style.top = place[1] + "mm";
+          controller.cell.style.width = spec.cut + "mm";
+          controller.cell.style.height = spec.cut + "mm";
+          return controller;
+        });
+      } else {
+        sheet.style.gridTemplateColumns = "repeat(" + spec.cols + ", " + spec.cut + "mm)";
+        sheet.style.gridTemplateRows = "repeat(" + spec.rows + ", " + spec.cut + "mm)";
+        controllers = slotsFor(key).map(function (state) {
+          return createCell(state);
+        });
+      }
     }
     syncInspector();
     updateCount();
