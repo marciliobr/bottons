@@ -203,6 +203,7 @@
     if (key !== "livre" && !SIZES[key]) key = "32";
     if (adjustingCell) adjustingCell.stopAdjust();
     endSwap();
+    if (freeMove && freeMove.ghost) freeMove.ghost.remove();
     freeMove = null;
     pinch = null;
     selected = null;
@@ -211,6 +212,7 @@
     placeNote = "";
     const addSizes = document.getElementById("add-sizes");
     if (addSizes) addSizes.hidden = key !== "livre";
+    if (key !== "livre") setAddOpen(false);
     sheet.classList.toggle("is-free", key === "livre");
     setSizePressed(key);
     sheet.replaceChildren();
@@ -522,7 +524,7 @@
   }
 
   function copyHint() {
-    if (currentKey === "livre") return "Arraste para mudar de lugar. Ele para ao encostar em outro.";
+    if (currentKey === "livre") return "Arraste para mudar de lugar. Segure Control e solte num espaço livre para copiar.";
     const mode = touchCopyMode();
     if (mode === "fingers") return "Arraste para trocar de lugar. Com dois dedos, copia. Pinçe para ampliar a folha.";
     if (mode === "hold") return "Arraste para trocar de lugar. Segure um instante para copiar. Pinçe para ampliar a folha.";
@@ -664,21 +666,150 @@
     return rect.width > 0 ? pageWidth / rect.width : 1;
   }
 
-  function moveFree(event) {
-    const dx = event.clientX - freeMove.startX;
-    const dy = event.clientY - freeMove.startY;
-    if (!freeMove.active) {
-      if (dx * dx + dy * dy < 36) return;
-      freeMove.active = true;
-      pushHistory(currentKey);
-      freeMove.controller.cell.classList.add("is-free-moving");
+  function clampCopySpot(state, left, top) {
+    const radius = SIZES[state.size].cut / 2;
+    let cx = left + radius;
+    let cy = top + radius;
+    cx = Math.max(pageMargin + radius, Math.min(pageWidth - pageMargin - radius, cx));
+    cy = Math.max(pageMargin + radius, Math.min(pageHeight - pageMargin - radius, cy));
+    return {
+      left: cx - radius,
+      top: cy - radius,
+      fits: circleFits(cx, cy, radius, otherCircles(state))
+    };
+  }
+
+  function restoreFreeOrigin() {
+    const state = freeMove.controller.state;
+    state.left = freeMove.originLeft;
+    state.top = freeMove.originTop;
+    freeMove.lastLeft = freeMove.originLeft;
+    freeMove.lastTop = freeMove.originTop;
+    placeFreeCell(freeMove.controller);
+  }
+
+  function ensureFreeGhost() {
+    if (freeMove.ghost) return;
+    const ghost = document.createElement("div");
+    const cell = freeMove.controller.cell;
+    const img = cell.querySelector("img");
+    ghost.className = "swap-ghost is-free-copy is-copy";
+    if (img && !img.hidden && (img.currentSrc || img.src)) {
+      const copy = document.createElement("img");
+      const rect = cell.getBoundingClientRect();
+      const scale = cell.offsetWidth ? rect.width / cell.offsetWidth : 1;
+      copy.alt = "";
+      copy.src = img.currentSrc || img.src;
+      copy.style.filter = img.style.filter;
+      copy.style.transform = img.style.transform;
+      copy.style.transformOrigin = "center center";
+      if (img.style.width) {
+        copy.style.width = (parseFloat(img.style.width) * scale) + "px";
+        copy.style.height = (parseFloat(img.style.height) * scale) + "px";
+        copy.style.left = ((parseFloat(img.style.left) || 0) * scale) + "px";
+        copy.style.top = ((parseFloat(img.style.top) || 0) * scale) + "px";
+      }
+      ghost.appendChild(copy);
     }
+    ghost.style.fontSize = "16px";
+    document.body.appendChild(ghost);
+    freeMove.ghost = ghost;
+  }
+
+  function placeFreeGhost(left, top, fits) {
+    const rect = sheet.getBoundingClientRect();
+    const px = rect.width / pageWidth;
+    const cut = SIZES[freeMove.controller.state.size].cut;
+    const ghost = freeMove.ghost;
+    ghost.style.left = (rect.left + left * px) + "px";
+    ghost.style.top = (rect.top + top * px) + "px";
+    ghost.style.width = (cut * px) + "px";
+    ghost.style.height = (cut * px) + "px";
+    ghost.classList.toggle("is-blocked", !fits);
+  }
+
+  function clearFreeGhost() {
+    if (!freeMove || !freeMove.ghost) return;
+    freeMove.ghost.remove();
+    freeMove.ghost = null;
+  }
+
+  function placeCopy(snapshot, url) {
+    const state = {
+      size: snapshot.size,
+      left: snapshot.left,
+      top: snapshot.top,
+      url: url,
+      scale: snapshot.scale,
+      x: snapshot.x,
+      y: snapshot.y,
+      rotation: snapshot.rotation,
+      brightness: snapshot.brightness,
+      saturation: snapshot.saturation
+    };
+    if (url) ownedUrls.add(url);
+    slotsFor("livre").push(state);
+    controllers.push(createCell(state));
+    placeNote = "";
+    updateCount();
+    updateUndo();
+    const live = controllers[controllers.length - 1];
+    if (live) select(live);
+  }
+
+  function duplicateFree(source, left, top) {
+    if (slotsFor("livre").indexOf(source.state) < 0) return;
+    const sourceState = source.state;
+    const snapshot = {
+      size: sourceState.size,
+      left: left,
+      top: top,
+      scale: sourceState.scale,
+      x: sourceState.x,
+      y: sourceState.y,
+      rotation: normalizeRotation(sourceState.rotation),
+      brightness: sourceState.brightness == null ? 1 : sourceState.brightness,
+      saturation: sourceState.saturation == null ? 1 : sourceState.saturation
+    };
+    if (!sourceState.url) {
+      placeCopy(snapshot, null);
+      return;
+    }
+    const from = sourceState.url;
+    const mark = histories.livre ? histories.livre.length : 0;
+    fetch(from).then(function (response) {
+      return response.blob();
+    }).then(function (blob) {
+      if (currentKey !== "livre" || slotsFor("livre").indexOf(sourceState) < 0) return;
+      placeCopy(snapshot, URL.createObjectURL(blob));
+    }).catch(function () {
+      const stack = histories.livre;
+      if (stack && stack.length === mark) stack.pop();
+      updateUndo();
+    });
+  }
+
+  function syncFreeDrag(clientX, clientY, copying) {
     const mm = mmPerPx();
-    const resolved = resolveFree(
-      freeMove.controller.state,
-      freeMove.originLeft + dx * mm,
-      freeMove.originTop + dy * mm
-    );
+    const left = freeMove.originLeft + (clientX - freeMove.startX) * mm;
+    const top = freeMove.originTop + (clientY - freeMove.startY) * mm;
+    freeMove.pointerX = clientX;
+    freeMove.pointerY = clientY;
+    if (copying) {
+      restoreFreeOrigin();
+      freeMove.controller.cell.classList.remove("is-free-moving");
+      ensureFreeGhost();
+      const spot = clampCopySpot(freeMove.controller.state, left, top);
+      freeMove.copying = true;
+      freeMove.spot = spot;
+      placeFreeGhost(spot.left, spot.top, spot.fits);
+      return;
+    }
+    clearFreeGhost();
+    freeMove.copying = false;
+    freeMove.spot = null;
+    freeMove.controller.cell.classList.add("is-free-moving");
+    const resolved = resolveFree(freeMove.controller.state, left, top);
     const next = resolved || { left: freeMove.lastLeft, top: freeMove.lastTop };
     freeMove.controller.state.left = next.left;
     freeMove.controller.state.top = next.top;
@@ -687,26 +818,45 @@
     placeFreeCell(freeMove.controller);
   }
 
+  function moveFree(event) {
+    const dx = event.clientX - freeMove.startX;
+    const dy = event.clientY - freeMove.startY;
+    if (!freeMove.active) {
+      if (dx * dx + dy * dy < 36) return;
+      freeMove.active = true;
+      pushHistory(currentKey);
+    }
+    syncFreeDrag(event.clientX, event.clientY, Boolean(event.ctrlKey));
+  }
+
   function finishFree(event) {
     if (!freeMove || event.pointerId !== freeMove.pointerId) return;
-    const state = freeMove.controller.state;
-    const moved = freeMove.active && (
-      Math.abs(state.left - freeMove.originLeft) > 0.05 ||
-      Math.abs(state.top - freeMove.originTop) > 0.05
-    );
-    freeMove.controller.cell.classList.remove("is-free-moving");
-    if (freeMove.active) {
+    const source = freeMove.controller;
+    const active = freeMove.active;
+    const copying = Boolean(event.ctrlKey);
+    if (copying && active) syncFreeDrag(event.clientX, event.clientY, true);
+    const spot = freeMove.spot;
+    if (copying) restoreFreeOrigin();
+    source.cell.classList.remove("is-free-moving");
+    clearFreeGhost();
+    if (active) {
       ignoreClick = true;
       setTimeout(function () {
         ignoreClick = false;
       }, 0);
     }
-    if (freeMove.active && !moved) {
+    const moved = active && !copying && (
+      Math.abs(source.state.left - freeMove.originLeft) > 0.05 ||
+      Math.abs(source.state.top - freeMove.originTop) > 0.05
+    );
+    const copied = active && copying && spot && spot.fits;
+    if (active && !moved && !copied) {
       const stack = histories[currentKey];
       if (stack && stack.length) stack.pop();
       updateUndo();
     }
     freeMove = null;
+    if (copied) duplicateFree(source, spot.left, spot.top);
   }
 
   function pushHistory(key) {
@@ -1060,6 +1210,11 @@
         originTop: controller.state.top,
         lastLeft: controller.state.left,
         lastTop: controller.state.top,
+        pointerX: event.clientX,
+        pointerY: event.clientY,
+        ghost: null,
+        copying: false,
+        spot: null,
         active: false
       };
       return;
@@ -1244,9 +1399,31 @@
     });
   });
 
+  function setAddOpen(open) {
+    const panel = document.getElementById("add-panel");
+    const toggle = document.getElementById("add-toggle");
+    if (!panel || !toggle) return;
+    panel.hidden = !open;
+    toggle.setAttribute("aria-expanded", open ? "true" : "false");
+  }
+
+  document.getElementById("add-toggle").addEventListener("click", function (event) {
+    event.stopPropagation();
+    const panel = document.getElementById("add-panel");
+    setAddOpen(panel.hidden);
+  });
+
+  document.addEventListener("click", function (event) {
+    const panel = document.getElementById("add-panel");
+    if (!panel || panel.hidden) return;
+    if (event.target.closest("#add-sizes")) return;
+    setAddOpen(false);
+  });
+
   document.querySelectorAll("[data-add]").forEach(function (button) {
     button.addEventListener("click", function () {
       addFree(button.dataset.add);
+      setAddOpen(false);
     });
   });
 
@@ -1306,12 +1483,22 @@
   });
 
   window.addEventListener("keydown", function (event) {
+    if (event.key === "Control" && freeMove && freeMove.active) {
+      syncFreeDrag(freeMove.pointerX, freeMove.pointerY, true);
+    }
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z" && !event.shiftKey) {
       event.preventDefault();
       undo();
       return;
     }
     if (event.key === "Control" && swap && swap.ghost) swap.ghost.classList.add("is-copy");
+    if (event.key === "Escape") {
+      const panel = document.getElementById("add-panel");
+      if (panel && !panel.hidden) {
+        setAddOpen(false);
+        return;
+      }
+    }
     if (event.key === "Escape" && adjustingCell) {
       adjustingCell.stopAdjust();
       return;
@@ -1331,6 +1518,9 @@
   });
 
   window.addEventListener("keyup", function (event) {
+    if (event.key === "Control" && freeMove && freeMove.active) {
+      syncFreeDrag(freeMove.pointerX, freeMove.pointerY, false);
+    }
     if (event.key === "Control" && swap && swap.ghost && !swap.copy) swap.ghost.classList.remove("is-copy");
   });
 

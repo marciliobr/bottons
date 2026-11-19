@@ -64,11 +64,25 @@
         <button type="button" data-size="58" aria-pressed="false">58</button>
         <button type="button" data-size="livre" aria-pressed="false">Livre</button>
       </div>
-      <div class="add-sizes" id="add-sizes" hidden>
-        <span>Adicionar</span>
-        <button type="button" data-add="32">32</button>
-        <button type="button" data-add="44">44</button>
-        <button type="button" data-add="58">58</button>
+      <div class="add-menu" id="add-sizes" hidden>
+        <button type="button" class="add-toggle" id="add-toggle" aria-expanded="false" aria-haspopup="menu">
+          <span class="add-plus" aria-hidden="true">+</span>
+          Adicionar
+        </button>
+        <div class="add-panel" id="add-panel" role="menu" hidden>
+          <button type="button" data-add="32" role="menuitem" aria-label="Adicionar botton de 32 mm">
+            <span class="add-dot add-dot-32" aria-hidden="true"></span>
+            <span>32 mm</span>
+          </button>
+          <button type="button" data-add="44" role="menuitem" aria-label="Adicionar botton de 44 mm">
+            <span class="add-dot add-dot-44" aria-hidden="true"></span>
+            <span>44 mm</span>
+          </button>
+          <button type="button" data-add="58" role="menuitem" aria-label="Adicionar botton de 58 mm">
+            <span class="add-dot add-dot-58" aria-hidden="true"></span>
+            <span>58 mm</span>
+          </button>
+        </div>
       </div>
       <div class="view-zoom" role="group" aria-label="Zoom da folha">
         <button type="button" id="view-out" aria-label="Reduzir a folha">−</button>
