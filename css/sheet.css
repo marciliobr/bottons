@@ -216,6 +216,38 @@ html[data-theme="dark"] .theme-toggle .icon-sun {
   box-shadow: var(--pressed-shadow);
 }
 
+.add-sizes {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 3px 3px 10px;
+  background: var(--chip);
+  border-radius: 11px;
+}
+
+.add-sizes[hidden] {
+  display: none !important;
+}
+
+.add-sizes span {
+  color: var(--chip-text);
+  font: 650 13px/1 system-ui, "Segoe UI", sans-serif;
+}
+
+.add-sizes button {
+  border: 0;
+  background: transparent;
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: var(--chip-text);
+  font: 650 14px/1 system-ui, "Segoe UI", sans-serif;
+  cursor: pointer;
+}
+
+.add-sizes button:hover {
+  background: var(--chip-hover);
+}
+
 .view-zoom {
   display: flex;
   align-items: center;
@@ -293,6 +325,7 @@ html[data-theme="dark"] .theme-toggle .icon-sun {
 }
 
 .sheet {
+  position: relative;
   width: 210mm;
   height: 297mm;
   background: #fff;
@@ -301,6 +334,14 @@ html[data-theme="dark"] .theme-toggle .icon-sun {
   justify-content: center;
   align-content: center;
   overflow: hidden;
+}
+
+.sheet.is-free {
+  display: block;
+}
+
+.sheet.is-free .cell {
+  position: absolute;
 }
 
 .cell {
@@ -328,6 +369,15 @@ html[data-theme="dark"] .theme-toggle .icon-sun {
 .cell.has-image .frame {
   cursor: grab;
   touch-action: none;
+}
+
+.sheet.is-free .frame {
+  cursor: grab;
+  touch-action: none;
+}
+
+.sheet.is-free .cell.is-free-moving {
+  z-index: 4;
 }
 
 .frame img {
@@ -728,7 +778,12 @@ body.is-swapping * {
     gap: 8px;
   }
 
-  #print {
+  #print,
+  #add-sizes {
+    grid-column: 1 / -1;
+  }
+
+  body:has(.sheet.is-free) .sizes {
     grid-column: 1 / -1;
   }
 

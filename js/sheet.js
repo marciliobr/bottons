@@ -25,6 +25,9 @@
   const maxSaturation = 2;
   const viewMin = 1;
   const viewMax = 3;
+  const pageWidth = 210;
+  const pageHeight = 297;
+  const pageMargin = 6;
   const memory = {};
   let currentKey = null;
   let pageFit = 1;
@@ -34,7 +37,9 @@
   let selected = null;
   let drag = null;
   let swap = null;
+  let freeMove = null;
   let ignoreClick = false;
+  let placeNote = "";
   const histories = {};
   const ownedUrls = new Set();
 
@@ -64,10 +69,15 @@
 
   function sizeFromHash() {
     const key = location.hash.replace("#", "");
+    if (key === "livre") return "livre";
     return SIZES[key] ? key : "32";
   }
 
   function slotsFor(key) {
+    if (key === "livre") {
+      if (!memory.livre) memory.livre = [];
+      return memory.livre;
+    }
     const spec = SIZES[key];
     const total = spec.cols * spec.rows;
     if (!memory[key]) {
@@ -117,6 +127,12 @@
   }
 
   function updateCount() {
+    if (currentKey === "livre") {
+      const total = slotsFor("livre").length;
+      const noun = total === 1 ? "botton" : "bottons";
+      countLabel.textContent = placeNote || (total + " " + noun);
+      return;
+    }
     const slots = slotsFor(currentKey);
     const filled = slots.filter(function (state) {
       return state.url;
@@ -125,7 +141,7 @@
   }
 
   function syncInspector() {
-    const active = selected && selected.state.url ? selected : null;
+    const active = selected && (selected.state.url || currentKey === "livre") ? selected : null;
     inspector.hidden = !active;
     document.body.classList.toggle("has-selection", Boolean(active));
     if (!active) return;
@@ -159,7 +175,7 @@
   }
 
   function select(controller) {
-    if (!controller || !controller.state.url) {
+    if (!controller || (!controller.state.url && currentKey !== "livre")) {
       deselect();
       return;
     }
@@ -184,27 +200,39 @@
   }
 
   function render(key) {
-    if (!SIZES[key]) key = "32";
+    if (key !== "livre" && !SIZES[key]) key = "32";
     if (adjustingCell) adjustingCell.stopAdjust();
     endSwap();
+    freeMove = null;
     pinch = null;
     selected = null;
     drag = null;
     currentKey = key;
-    const spec = SIZES[key];
-    const slots = slotsFor(key);
-
-    if (sizeMark) sizeMark.textContent = spec.diameter + " mm";
+    placeNote = "";
+    const addSizes = document.getElementById("add-sizes");
+    if (addSizes) addSizes.hidden = key !== "livre";
+    sheet.classList.toggle("is-free", key === "livre");
     setSizePressed(key);
-    document.documentElement.style.setProperty("--diameter", spec.diameter + "mm");
-    document.documentElement.style.setProperty("--cut", spec.cut + "mm");
-    document.documentElement.style.setProperty("--gap", spec.gap + "mm");
-    sheet.style.gridTemplateColumns = "repeat(" + spec.cols + ", " + spec.cut + "mm)";
-    sheet.style.gridTemplateRows = "repeat(" + spec.rows + ", " + spec.cut + "mm)";
     sheet.replaceChildren();
-    controllers = slots.map(function (state) {
-      return createCell(state);
-    });
+    if (key === "livre") {
+      if (sizeMark) sizeMark.textContent = "Livre";
+      sheet.style.gridTemplateColumns = "";
+      sheet.style.gridTemplateRows = "";
+      controllers = slotsFor(key).map(function (state) {
+        return createCell(state);
+      });
+    } else {
+      const spec = SIZES[key];
+      if (sizeMark) sizeMark.textContent = spec.diameter + " mm";
+      document.documentElement.style.setProperty("--diameter", spec.diameter + "mm");
+      document.documentElement.style.setProperty("--cut", spec.cut + "mm");
+      document.documentElement.style.setProperty("--gap", spec.gap + "mm");
+      sheet.style.gridTemplateColumns = "repeat(" + spec.cols + ", " + spec.cut + "mm)";
+      sheet.style.gridTemplateRows = "repeat(" + spec.rows + ", " + spec.cut + "mm)";
+      controllers = slotsFor(key).map(function (state) {
+        return createCell(state);
+      });
+    }
     syncInspector();
     updateCount();
     updateUndo();
@@ -214,6 +242,13 @@
   function createCell(state) {
     const cell = document.createElement("div");
     cell.className = "cell";
+    if (state.size && SIZES[state.size]) {
+      cell.style.setProperty("--diameter", SIZES[state.size].diameter + "mm");
+      cell.style.left = state.left + "mm";
+      cell.style.top = state.top + "mm";
+      cell.style.width = SIZES[state.size].cut + "mm";
+      cell.style.height = SIZES[state.size].cut + "mm";
+    }
 
     const frame = document.createElement("div");
     frame.className = "frame";
@@ -393,6 +428,7 @@
       state.saturation = 1;
       img.src = state.url;
       showImage();
+      placeNote = "";
       updateCount();
       select(controller);
       if (record) releaseUnused();
@@ -461,7 +497,10 @@
     frame.addEventListener("click", function () {
       if (ignoreClick || drag || controller.isAdjusting()) return;
       if (state.url) select(controller);
-      else input.click();
+      else if (currentKey === "livre") {
+        select(controller);
+        input.click();
+      } else input.click();
     });
 
     input.addEventListener("change", function () {
@@ -483,6 +522,7 @@
   }
 
   function copyHint() {
+    if (currentKey === "livre") return "Arraste para mudar de lugar. Ele para ao encostar em outro.";
     const mode = touchCopyMode();
     if (mode === "fingers") return "Arraste para trocar de lugar. Com dois dedos, copia. Pinçe para ampliar a folha.";
     if (mode === "hold") return "Arraste para trocar de lugar. Segure um instante para copiar. Pinçe para ampliar a folha.";
@@ -507,11 +547,176 @@
     return null;
   }
 
+  function otherCircles(state) {
+    return slotsFor("livre").filter(function (other) {
+      return other !== state;
+    }).map(function (other) {
+      const cut = SIZES[other.size].cut;
+      return { x: other.left + cut / 2, y: other.top + cut / 2, r: cut / 2 };
+    });
+  }
+
+  function circleFits(cx, cy, radius, others) {
+    if (cx - radius < pageMargin - 0.001 || cy - radius < pageMargin - 0.001) return false;
+    if (cx + radius > pageWidth - pageMargin + 0.001 || cy + radius > pageHeight - pageMargin + 0.001) return false;
+    return others.every(function (other) {
+      const dx = cx - other.x;
+      const dy = cy - other.y;
+      const min = radius + other.r;
+      return dx * dx + dy * dy >= min * min - 0.01;
+    });
+  }
+
+  function findSpot(size) {
+    const radius = SIZES[size].cut / 2;
+    const others = otherCircles(null);
+    const min = pageMargin + radius;
+    const maxX = pageWidth - pageMargin - radius;
+    const maxY = pageHeight - pageMargin - radius;
+    for (let cy = min; cy <= maxY + 0.001; cy += 1) {
+      for (let cx = min; cx <= maxX + 0.001; cx += 1) {
+        if (circleFits(cx, cy, radius, others)) return { left: cx - radius, top: cy - radius };
+      }
+    }
+    return null;
+  }
+
+  function resolveFree(state, left, top) {
+    const radius = SIZES[state.size].cut / 2;
+    let cx = left + radius;
+    let cy = top + radius;
+    const others = otherCircles(state);
+    for (let pass = 0; pass < 8; pass += 1) {
+      others.forEach(function (other) {
+        let dx = cx - other.x;
+        let dy = cy - other.y;
+        let dist = Math.sqrt(dx * dx + dy * dy);
+        const min = radius + other.r;
+        if (dist < min) {
+          if (dist < 0.001) {
+            dx = 1;
+            dy = 0;
+            dist = 1;
+          }
+          cx = other.x + (dx / dist) * min;
+          cy = other.y + (dy / dist) * min;
+        }
+      });
+      cx = Math.max(pageMargin + radius, Math.min(pageWidth - pageMargin - radius, cx));
+      cy = Math.max(pageMargin + radius, Math.min(pageHeight - pageMargin - radius, cy));
+    }
+    if (!circleFits(cx, cy, radius, others)) return null;
+    return { left: cx - radius, top: cy - radius };
+  }
+
+  function placeFreeCell(controller) {
+    controller.cell.style.left = controller.state.left + "mm";
+    controller.cell.style.top = controller.state.top + "mm";
+  }
+
+  function addFree(size) {
+    if (!SIZES[size] || currentKey !== "livre") return;
+    const spot = findSpot(size);
+    if (!spot) {
+      placeNote = "Não cabe um de " + size + " mm";
+      updateCount();
+      return;
+    }
+    placeNote = "";
+    pushHistory("livre");
+    const state = {
+      size: size,
+      left: spot.left,
+      top: spot.top,
+      url: null,
+      scale: fitScale,
+      x: 0,
+      y: 0,
+      rotation: 0,
+      brightness: 1,
+      saturation: 1
+    };
+    slotsFor("livre").push(state);
+    controllers.push(createCell(state));
+    updateCount();
+    updateUndo();
+  }
+
+  function removeFree(controller) {
+    if (!controller) return;
+    pushHistory("livre");
+    if (controller.isAdjusting()) controller.stopAdjust();
+    const index = slotsFor("livre").indexOf(controller.state);
+    if (index >= 0) slotsFor("livre").splice(index, 1);
+    controller.cell.remove();
+    controllers = controllers.filter(function (item) {
+      return item !== controller;
+    });
+    placeNote = "";
+    if (selected === controller) deselect();
+    updateCount();
+    releaseUnused();
+    updateUndo();
+  }
+
+  function mmPerPx() {
+    const rect = sheet.getBoundingClientRect();
+    return rect.width > 0 ? pageWidth / rect.width : 1;
+  }
+
+  function moveFree(event) {
+    const dx = event.clientX - freeMove.startX;
+    const dy = event.clientY - freeMove.startY;
+    if (!freeMove.active) {
+      if (dx * dx + dy * dy < 36) return;
+      freeMove.active = true;
+      pushHistory(currentKey);
+      freeMove.controller.cell.classList.add("is-free-moving");
+    }
+    const mm = mmPerPx();
+    const resolved = resolveFree(
+      freeMove.controller.state,
+      freeMove.originLeft + dx * mm,
+      freeMove.originTop + dy * mm
+    );
+    const next = resolved || { left: freeMove.lastLeft, top: freeMove.lastTop };
+    freeMove.controller.state.left = next.left;
+    freeMove.controller.state.top = next.top;
+    freeMove.lastLeft = next.left;
+    freeMove.lastTop = next.top;
+    placeFreeCell(freeMove.controller);
+  }
+
+  function finishFree(event) {
+    if (!freeMove || event.pointerId !== freeMove.pointerId) return;
+    const state = freeMove.controller.state;
+    const moved = freeMove.active && (
+      Math.abs(state.left - freeMove.originLeft) > 0.05 ||
+      Math.abs(state.top - freeMove.originTop) > 0.05
+    );
+    freeMove.controller.cell.classList.remove("is-free-moving");
+    if (freeMove.active) {
+      ignoreClick = true;
+      setTimeout(function () {
+        ignoreClick = false;
+      }, 0);
+    }
+    if (freeMove.active && !moved) {
+      const stack = histories[currentKey];
+      if (stack && stack.length) stack.pop();
+      updateUndo();
+    }
+    freeMove = null;
+  }
+
   function pushHistory(key) {
     if (!key) return;
     if (!histories[key]) histories[key] = [];
     histories[key].push(slotsFor(key).map(function (state) {
       return {
+        size: state.size,
+        left: state.left,
+        top: state.top,
         url: state.url,
         scale: state.scale,
         x: state.x,
@@ -563,6 +768,25 @@
     if (!stack || !stack.length) return;
     const snap = stack.pop();
     if (adjustingCell) adjustingCell.stopAdjust();
+    if (currentKey === "livre") {
+      memory.livre = snap.map(function (saved) {
+        return {
+          size: saved.size,
+          left: saved.left,
+          top: saved.top,
+          url: saved.url,
+          scale: saved.scale,
+          x: saved.x,
+          y: saved.y,
+          rotation: normalizeRotation(saved.rotation),
+          brightness: saved.brightness,
+          saturation: saved.saturation
+        };
+      });
+      render("livre");
+      releaseUnused();
+      return;
+    }
     snap.forEach(function (saved, index) {
       const state = slotsFor(currentKey)[index];
       state.url = saved.url;
@@ -826,6 +1050,20 @@
       event.preventDefault();
       return;
     }
+    if (currentKey === "livre") {
+      freeMove = {
+        controller: controller,
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        originLeft: controller.state.left,
+        originTop: controller.state.top,
+        lastLeft: controller.state.left,
+        lastTop: controller.state.top,
+        active: false
+      };
+      return;
+    }
     if (!controller.state.url || swap) return;
     swap = {
       controller: controller,
@@ -850,8 +1088,10 @@
       armCopy();
       return;
     }
+    if (freeMove && freeMove.active) return;
     if (pointers.size >= 2 && !(swap && swap.active)) {
       if (swap) endSwap();
+      if (freeMove) freeMove = null;
       if (drag) {
         drag.controller.frame.classList.remove("is-dragging");
         drag = null;
@@ -880,6 +1120,10 @@
       drag.controller.layout();
       return;
     }
+    if (freeMove && event.pointerId === freeMove.pointerId) {
+      moveFree(event);
+      return;
+    }
     if (!swap || event.pointerId !== swap.pointerId) return;
     moveSwap(event);
   }, { passive: false });
@@ -903,6 +1147,10 @@
       drag = null;
       return;
     }
+    if (freeMove && event.pointerId === freeMove.pointerId) {
+      finishFree(event);
+      return;
+    }
     finishSwap(event);
   });
 
@@ -911,6 +1159,10 @@
     if (drag && event.pointerId === drag.pointerId) {
       drag.controller.frame.classList.remove("is-dragging");
       drag = null;
+      return;
+    }
+    if (freeMove && event.pointerId === freeMove.pointerId) {
+      finishFree(event);
       return;
     }
     finishSwap(event);
@@ -992,6 +1244,12 @@
     });
   });
 
+  document.querySelectorAll("[data-add]").forEach(function (button) {
+    button.addEventListener("click", function () {
+      addFree(button.dataset.add);
+    });
+  });
+
   window.addEventListener("hashchange", function () {
     const key = sizeFromHash();
     if (key !== currentKey) render(key);
@@ -1010,7 +1268,9 @@
   });
 
   document.getElementById("remove").addEventListener("click", function () {
-    if (selected) selected.clearImage();
+    if (!selected) return;
+    if (currentKey === "livre") removeFree(selected);
+    else selected.clearImage();
   });
 
   document.getElementById("center").addEventListener("click", function () {
@@ -1091,6 +1351,14 @@
   document.getElementById("undo").addEventListener("click", undo);
 
   document.getElementById("clear").addEventListener("click", function () {
+    if (currentKey === "livre") {
+      if (!slotsFor("livre").length) return;
+      pushHistory("livre");
+      memory.livre = [];
+      render("livre");
+      releaseUnused();
+      return;
+    }
     const filled = controllers.some(function (controller) {
       return controller.state.url;
     });
