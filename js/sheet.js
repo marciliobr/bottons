@@ -141,16 +141,27 @@
   }
 
   function syncInspector() {
-    const active = selected && (selected.state.url || currentKey === "livre") ? selected : null;
+    const active = selected || null;
     inspector.hidden = !active;
     document.body.classList.toggle("has-selection", Boolean(active));
     if (!active) return;
     const adjusting = active.isAdjusting();
+    const hasPhoto = Boolean(active.state.url);
     adjustButton.textContent = adjusting ? "Concluir" : "Mover";
     adjustButton.classList.toggle("is-on", adjusting);
+    adjustButton.disabled = !hasPhoto;
+    document.getElementById("center").disabled = !hasPhoto;
+    document.getElementById("rotate-left").disabled = !hasPhoto;
+    document.getElementById("rotate-right").disabled = !hasPhoto;
+    zoomInput.disabled = !hasPhoto;
+    rotationInput.disabled = !hasPhoto;
+    brightnessInput.disabled = !hasPhoto;
+    saturationInput.disabled = !hasPhoto;
     inspectorHint.textContent = adjusting
       ? adjustHint()
-      : copyHint();
+      : hasPhoto
+        ? copyHint()
+        : "O centro escolhe a foto.";
     zoomInput.value = String(active.state.scale);
     rotationInput.value = String(normalizeRotation(active.state.rotation));
     brightnessInput.value = String(active.state.brightness);
@@ -175,7 +186,7 @@
   }
 
   function select(controller) {
-    if (!controller || (!controller.state.url && currentKey !== "livre")) {
+    if (!controller) {
       deselect();
       return;
     }
@@ -270,6 +281,11 @@
     addMark.className = "add-mark";
     addMark.setAttribute("aria-hidden", "true");
 
+    const pick = document.createElement("button");
+    pick.type = "button";
+    pick.className = "pick";
+    pick.setAttribute("aria-label", "Escolher foto");
+
     const input = document.createElement("input");
     input.type = "file";
     input.accept = "image/*";
@@ -277,7 +293,7 @@
     input.tabIndex = -1;
 
     frame.appendChild(img);
-    cell.append(frame, cut, circle, addMark, input);
+    cell.append(frame, cut, circle, addMark, pick, input);
     sheet.appendChild(cell);
 
     const controller = {
@@ -496,13 +512,14 @@
 
     img.addEventListener("load", layoutImage);
 
-    frame.addEventListener("click", function () {
+    cell.addEventListener("click", function (event) {
       if (ignoreClick || drag || controller.isAdjusting()) return;
-      if (state.url) select(controller);
-      else if (currentKey === "livre") {
+      if (!state.url && event.target.closest(".pick")) {
         select(controller);
         input.click();
-      } else input.click();
+        return;
+      }
+      select(controller);
     });
 
     input.addEventListener("change", function () {
@@ -1182,9 +1199,9 @@
   sheet.addEventListener("pointerdown", function (event) {
     if (pinch || pointers.size >= 2) return;
     if (event.button !== 0) return;
-    const frame = event.target.closest(".frame");
-    if (!frame || !sheet.contains(frame)) return;
-    const controller = frame.closest(".cell").controller;
+    const cell = event.target.closest(".cell");
+    if (!cell || !sheet.contains(cell)) return;
+    const controller = cell.controller;
     if (!controller) return;
     if (controller.isAdjusting()) {
       const index = controllers.indexOf(controller);
@@ -1446,7 +1463,7 @@
 
   document.getElementById("remove").addEventListener("click", function () {
     if (!selected) return;
-    if (currentKey === "livre") removeFree(selected);
+    if (currentKey === "livre" && !selected.state.url) removeFree(selected);
     else selected.clearImage();
   });
 

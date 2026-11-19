@@ -364,6 +364,12 @@ html[data-theme="dark"] .add-plus {
   background: var(--surface-hover);
 }
 
+.inspector button:disabled,
+.inspector input:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 #print,
 .inspector #adjust.is-on {
   background: var(--accent);
@@ -536,11 +542,40 @@ body.is-swapping * {
   pointer-events: none;
 }
 
+.pick {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 3;
+  width: var(--diameter);
+  height: var(--diameter);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  transform: translate(-50%, -50%);
+  cursor: pointer;
+  appearance: none;
+}
+
+.cell.has-image .pick {
+  display: none;
+}
+
+.pick:hover {
+  background: rgba(154, 52, 18, 0.08);
+}
+
+.sheet.is-free .pick {
+  touch-action: none;
+}
+
 .add-mark {
   position: absolute;
   left: 50%;
   top: 50%;
-  z-index: 2;
+  z-index: 4;
   width: 18px;
   height: 18px;
   transform: translate(-50%, -50%);
@@ -994,6 +1029,7 @@ body.is-swapping * {
   .toolbar,
   .inspector,
   .add-mark,
+  .pick,
   .circle,
   .cell:not(.has-image) .cut {
     display: none !important;
