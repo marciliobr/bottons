@@ -3,6 +3,9 @@
     "32": {
       diameter: 32,
       cut: 44,
+      cols: 4,
+      rows: 6,
+      gap: 4,
       places: [
         [6, 6], [83, 6], [160, 6],
         [44.5, 30.1], [121.5, 30.1],
@@ -20,6 +23,9 @@
     "44": {
       diameter: 44,
       cut: 54,
+      cols: 3,
+      rows: 5,
+      gap: 3.5,
       places: [
         [6, 6], [102, 6],
         [54, 34.875], [150, 34.875],
@@ -35,6 +41,9 @@
     "58": {
       diameter: 58,
       cut: 70,
+      cols: 2,
+      rows: 3,
+      gap: 16,
       places: [
         [70, 6],
         [6, 49],
@@ -73,6 +82,12 @@
   const pageHeight = 297;
   const pageMargin = 6;
   const memory = {};
+  const overflow = {};
+  let layoutMode = "colmeia";
+  try {
+    const savedLayout = localStorage.getItem("may-bottons-layout");
+    if (savedLayout === "retangular" || savedLayout === "colmeia") layoutMode = savedLayout;
+  } catch (error) {}
   let currentKey = null;
   let pageFit = 1;
   let viewZoom = 1;
@@ -117,19 +132,74 @@
     return SIZES[key] ? key : "32";
   }
 
+  function blankSlot() {
+    return { url: null, scale: fitScale, x: 0, y: 0, rotation: 0, brightness: 1, saturation: 1 };
+  }
+
+  function copySlot(state) {
+    return {
+      url: state.url,
+      scale: state.scale,
+      x: state.x,
+      y: state.y,
+      rotation: state.rotation || 0,
+      brightness: state.brightness == null ? 1 : state.brightness,
+      saturation: state.saturation == null ? 1 : state.saturation
+    };
+  }
+
+  function honeycomb(key) {
+    return layoutMode === "colmeia" && SIZES[key] && SIZES[key].places;
+  }
+
+  function slotCount(key) {
+    const spec = SIZES[key];
+    if (honeycomb(key)) return spec.places.length;
+    return spec.cols * spec.rows;
+  }
+
+  function fitSlots(key) {
+    const total = slotCount(key);
+    const have = (memory[key] || []).concat(overflow[key] || []);
+    const kept = have.slice(0, total).map(copySlot);
+    while (kept.length < total) kept.push(blankSlot());
+    overflow[key] = have.slice(total).map(copySlot);
+    memory[key] = kept;
+    return memory[key];
+  }
+
   function slotsFor(key) {
     if (key === "livre") {
       if (!memory.livre) memory.livre = [];
       return memory.livre;
     }
-    const spec = SIZES[key];
-    const total = spec.places ? spec.places.length : spec.cols * spec.rows;
-    if (!memory[key] || memory[key].length !== total) {
-      memory[key] = Array.from({ length: total }, function () {
-        return { url: null, scale: fitScale, x: 0, y: 0, rotation: 0, brightness: 1, saturation: 1 };
-      });
-    }
+    if (!memory[key] || memory[key].length !== slotCount(key)) return fitSlots(key);
     return memory[key];
+  }
+
+  function syncLayoutButtons() {
+    document.querySelectorAll("[data-layout]").forEach(function (button) {
+      button.setAttribute("aria-pressed", button.dataset.layout === layoutMode ? "true" : "false");
+    });
+    const group = document.getElementById("layouts");
+    if (group) group.hidden = currentKey === "livre";
+  }
+
+  function setLayout(mode) {
+    if (mode !== "retangular" && mode !== "colmeia") return;
+    if (mode === layoutMode) return;
+    layoutMode = mode;
+    try {
+      localStorage.setItem("may-bottons-layout", mode);
+    } catch (error) {}
+    if (currentKey && SIZES[currentKey]) {
+      histories[currentKey] = [];
+      fitSlots(currentKey);
+      releaseUnused();
+    }
+    syncLayoutButtons();
+    if (currentKey && currentKey !== "livre") render(currentKey);
+    else updateUndo();
   }
 
   function syncHash(key) {
@@ -269,8 +339,9 @@
     if (addSizes) addSizes.hidden = key !== "livre";
     if (key !== "livre") setAddOpen(false);
     sheet.classList.toggle("is-free", key === "livre");
-    sheet.classList.toggle("is-placed", Boolean(SIZES[key] && SIZES[key].places));
+    sheet.classList.toggle("is-placed", honeycomb(key));
     setSizePressed(key);
+    syncLayoutButtons();
     sheet.replaceChildren();
     if (key === "livre") {
       if (sizeMark) sizeMark.textContent = "Livre";
@@ -285,7 +356,7 @@
       document.documentElement.style.setProperty("--diameter", spec.diameter + "mm");
       document.documentElement.style.setProperty("--cut", spec.cut + "mm");
       if (spec.gap != null) document.documentElement.style.setProperty("--gap", spec.gap + "mm");
-      if (spec.places) {
+      if (honeycomb(key)) {
         sheet.style.gridTemplateColumns = "";
         sheet.style.gridTemplateRows = "";
         controllers = slotsFor(key).map(function (state, index) {
@@ -970,6 +1041,11 @@
         });
       });
     });
+    Object.keys(overflow).forEach(function (key) {
+      (overflow[key] || []).forEach(function (state) {
+        if (state.url) used.add(state.url);
+      });
+    });
     return used;
   }
 
@@ -1467,6 +1543,12 @@
     const factor = event.deltaY < 0 ? 1.08 : 1 / 1.08;
     setViewZoom(viewZoom * factor);
   }, { passive: false });
+
+  document.querySelectorAll("[data-layout]").forEach(function (button) {
+    button.addEventListener("click", function () {
+      setLayout(button.dataset.layout);
+    });
+  });
 
   document.querySelectorAll("[data-size]").forEach(function (button) {
     button.addEventListener("click", function () {

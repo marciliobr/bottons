@@ -216,6 +216,42 @@ html[data-theme="dark"] .theme-toggle .icon-sun {
   box-shadow: var(--pressed-shadow);
 }
 
+.layouts {
+  display: flex;
+  padding: 3px;
+  background: var(--chip);
+  border-radius: 11px;
+}
+
+.layouts[hidden] {
+  display: none;
+}
+
+.layouts button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: transparent;
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: var(--chip-text);
+  font: 650 13px/1 system-ui, "Segoe UI", sans-serif;
+  cursor: pointer;
+}
+
+.layouts button[aria-pressed="true"] {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--pressed-shadow);
+}
+
+.layout-icon {
+  width: 15px;
+  height: 15px;
+  flex: none;
+}
+
 .add-menu {
   position: relative;
 }
@@ -891,8 +927,15 @@ body.is-swapping * {
   }
 
   #print,
-  #add-sizes {
+  #add-sizes,
+  .layouts {
     grid-column: 1 / -1;
+  }
+
+  .layouts button {
+    flex: 1;
+    justify-content: center;
+    min-height: 34px;
   }
 
   #add-sizes .add-toggle {
